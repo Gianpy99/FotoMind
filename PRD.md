@@ -98,6 +98,47 @@ Il progetto è progettato per essere eseguito su **Google Coral TPU** per infere
 
 ---
 
+## Roadmap futura con dettagli di implementazione
+
+### Fase 1 — Prototipo base
+- Implementazione classificazione scene su TPU
+- Database locale per metadati foto
+- Script batch per importazione foto
+- Interfaccia web minimale con anteprime
+
+### Fase 2 — Riconoscimento volti
+- Creazione dataset familiare locale
+- Addestramento/ottimizzazione modello FaceNet o ArcFace
+- Integrazione riconoscimento volti con titolazione foto
+- Visualizzazione volti riconosciuti su interfaccia web
+
+### Fase 3 — Valutazione qualità foto
+- Integrazione modello NIMA quantizzato per TPU
+- Calcolo punteggio qualità per ciascuna foto
+- Creazione tag automatici (es. “nitida”, “colori vivaci”)
+- Filtri avanzati nell’interfaccia web per selezione foto migliori
+
+### Fase 4 — Captioning automatico
+- Implementazione modello leggero Show-and-Tell o BLIP su TPU
+- Generazione titolo/descrizione basata su scena + volti
+- Funzione fallback CPU se TPU non disponibile
+- Opzione modifica manuale titolo nell’interfaccia web
+
+### Fase 5 — Miglioramento interfaccia web
+- Dashboard statistiche avanzata
+- Filtri combinati (volto, categoria, punteggio qualità)
+- Ordinamento e ricerca veloce
+- Anteprime dinamiche e caricamento ottimizzato
+
+### Fase 6 — Funzionalità avanzate
+- Importazione automatica da fotocamera o SD card
+- Funzione batch per valutazione qualità e titolazione
+- Backup automatico del catalogo
+- Esportazione CSV/JSON dei metadati
+- Eventuale integrazione cloud privata per sincronizzazione multi-dispositivo
+
+---
+
 ## README sintetico per GitHub
 
 ### PhotoFamily Catalog
