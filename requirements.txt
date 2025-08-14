@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+flask
+opencv-python
+tensorflow
+tflite_runtime
+numpy
+pillow
+face_recognition
