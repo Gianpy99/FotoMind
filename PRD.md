@@ -1,101 +1,123 @@
-# FotoMind — Photo Cataloging & Quality Analysis System
+# PhotoFamily Catalog — PRD
 
-## **1. Overview**
-**FotoMind** è un sistema per catalogare, analizzare e valutare le foto scattate con fotocamere reflex (es. Sony A7 II).  
-Obiettivi principali:
-- Generazione automatica di titoli basati su scena, oggetti e volti riconosciuti.
-- Valutazione della qualità della foto (nitidezza, colore, esposizione, rumore).
-- Riconoscimento di volti familiari per organizzazione personalizzata.
-- Navigazione e gestione del catalogo tramite interfaccia web.
+## Titolo del progetto
+**PhotoFamily Catalog**  
+Catalogazione intelligente di foto reflex con riconoscimento volti familiari, valutazione qualità immagine e titolazione automatica.
 
 ---
 
-## **2. Scopo**
-Fornire uno strumento che permetta di:
-- Catalogare automaticamente foto personali.
-- Valutare la qualità tecnica delle foto.
-- Riconoscere persone chiave e scene ricorrenti.
-- Fornire un’interfaccia web interattiva per esplorare e filtrare il catalogo.
+## Descrizione progetto
+Questo progetto permette di organizzare e catalogare le foto scattate con la Sony A7 II. Utilizza moduli AI per:
+- Riconoscere persone della famiglia e associare titoli personalizzati
+- Valutare qualità delle foto (nitidezza, esposizione, colori)
+- Classificare scene e generare titoli automatici
+- Fornire un’interfaccia web per navigazione e gestione del catalogo
+
+Il progetto è progettato per essere eseguito su **Google Coral TPU** per inferenze veloci e localmente per preservare la privacy.
 
 ---
 
-## **3. Requisiti Funzionali**
-1. Caricamento foto RAW/JPG.
-2. Analisi AI per:
-   - Riconoscimento scena/oggetti.
-   - Riconoscimento volti.
-   - Valutazione qualità foto (nitidezza, esposizione, colore, rumore).
-3. Generazione automatica di titoli e tagging.
-4. Catalogazione per persona, scena, data, punteggio qualità.
-5. Interfaccia web per:
-   - Navigazione e ricerca avanzata.
-   - Ordinamento per punteggio qualità o persona.
-   - Zoom e preview thumbnail.
-   - Modifica titoli e aggiunta tag manuali.
-6. Suggerimenti automatici “Best of” (fase avanzata).
+## Obiettivi principali
+1. Automatizzare la catalogazione delle foto
+2. Riconoscere volti familiari
+3. Valutare qualità delle immagini
+4. Generare titoli e descrizioni automatiche
+5. Fornire interfaccia web semplice e veloce per navigare il catalogo
 
 ---
 
-## **4. Requisiti Non Funzionali**
-- Supporto per Edge TPU (Google Coral) per accelerare l’inferenza AI.
-- Database leggero (SQLite) per MVP, scalabile a PostgreSQL.
-- API RESTful per comunicazione tra backend AI e frontend.
-- Web UI responsive e mobile-friendly.
-- Sicurezza e gestione accessi per eventuale uso remoto.
+## Moduli AI
+
+### 1. Modulo Classificazione Scene
+- **Obiettivo:** Assegnare categorie generali alla foto (es. “ritratto”, “paesaggio”, “macro”)  
+- **Modello consigliato:** EfficientNet-Lite o MobileNetV3 quantizzati per Edge TPU  
+- **Input:** immagine RAW o JPEG  
+- **Output:** categoria scena + probabilità di confidenza
+
+### 2. Modulo Riconoscimento Volti Familiari
+- **Obiettivo:** Identificare persone della famiglia  
+- **Modello consigliato:** FaceNet o ArcFace convertiti in TFLite per Edge TPU  
+- **Input:** immagine  
+- **Output:** embedding del volto → confronto con database locale → nome riconosciuto
+
+### 3. Modulo Valutazione Qualità Foto
+- **Obiettivo:** Analizzare nitidezza, esposizione, contrasto e saturazione  
+- **Modello consigliato:** NIMA (Neural Image Assessment) ottimizzato per TPU  
+- **Input:** immagine  
+- **Output:** punteggio qualità + tag automatici (es. “foto nitida”, “colore vivace”)
+
+### 4. Modulo Captioning / Titolo Automatico
+- **Obiettivo:** Generare un titolo sintetico o una descrizione breve della foto  
+- **Modello consigliato:** Show-and-Tell leggero o BLIP quantizzato per TPU  
+- **Input:** immagine classificata + volti riconosciuti  
+- **Output:** frase sintetica descrittiva (es. “Marco e Giulia al parco”)  
+- **Note:** opzionale nella prima versione
 
 ---
 
-## **5. Tecnologie e Modelli AI**
-- **Riconoscimento oggetti/scena:** MobileNetV3, EfficientNet Lite (Edge TPU)
-- **Riconoscimento volti:** FaceNet / BlazeFace (Edge TPU)
-- **Valutazione qualità foto:** algoritmi nitidezza (Laplacian/FFT), analisi esposizione e colore
-- **Database:** SQLite (MVP) / PostgreSQL (fase avanzata)
-- **Web UI:** React o Vue.js
-- **Backend:** Python (FastAPI o Flask)
+## Modulo Interfaccia Web
+- **Obiettivo:** Navigare, filtrare e visualizzare le foto catalogate  
+- **Tecnologia suggerita:** FastAPI o Flask per backend + React per frontend  
+- **Funzionalità principali:**
+  - Ricerca per categoria, persona, punteggio qualità
+  - Anteprima foto e dettagli
+  - Modifica titolo/tag manualmente
+  - Dashboard statistiche qualità e riconoscimento
 
 ---
 
-## **6. Pianificazione per Fasi**
-
-### **Fase 1 — MVP**
-- Caricamento foto e analisi base oggetti/volti.
-- Titoli automatici semplici.
-- Catalogo ricercabile per persona/scena.
-- Web UI: griglia immagini + filtri base.
-
-### **Fase 2**
-- Valutazione qualità foto avanzata.
-- Miglioramento titoli con contesto più dettagliato.
-- Tagging avanzato per oggetti secondari.
-- Web UI avanzata: zoom full-screen, modifica titoli, ordinamento per qualità, tagging interattivo.
-
-### **Fase 3**
-- Suggerimenti “best of week”.
-- Aggiornamento volti/familiari (apprendimento incrementale).
-- Dashboard statistiche e grafici sul catalogo.
-- Accesso remoto sicuro e interfaccia mobile-friendly.
+## Flusso operativo
+1. Foto importata nel sistema
+2. Modulo classificazione scena → assegna categoria
+3. Modulo riconoscimento volti → identifica membri famiglia
+4. Modulo valutazione qualità → assegna punteggio e tag
+5. Modulo captioning → genera titolo automatico
+6. Salvataggio metadati e foto nel catalogo
+7. Accesso via interfaccia web
 
 ---
 
-## **7. Blueprint Tecnico**
+## Planning tecnico e priorità
 
-| Fase | Input | Modello / Tecnologia | Elaborazione / Funzione | Output | TPU Compatibilità | Web UI |
-|------|-------|--------------------|-----------------------|--------|-----------------|--------|
-| MVP | Foto RAW/JPG | EdgeTPU MobileNetV3 / EfficientNet Lite, FaceNet / BlazeFace | Riconoscimento scena/oggetti e volti, generazione titoli base | Titolo, persone rilevate, metadati EXIF | Sì | Griglia immagini, filtri base |
-| Fase 2 | Foto analizzate MVP | EdgeTPU qualità foto (nitidezza, colore, esposizione) | Valutazione qualità, miglioramento titoli, tagging avanzato | Punteggio qualità, titoli migliorati, tag dettagliato | Sì | Zoom full-screen, ordinamento per qualità, modifica titoli, tagging interattivo |
-| Fase 3 | Catalogo completo + storico | Apprendimento incrementale volti, event detection AI | Suggerimenti “best of”, aggiornamento volti/familiari, statistiche | Suggerimenti foto principali, database volti aggiornato, grafici | Opzionale | Dashboard statistiche, mobile-friendly UI, filtri avanzati |
-
----
-
-## **8. Note Implementative**
-- TPU Edge permette inferenza veloce anche su dataset medio-piccoli.
-- Titoli e punteggi qualità possono essere aggiornati incrementando il dataset.
-- Web UI può essere inizialmente locale, estendibile a accesso cloud futuro.
-- Possibilità di aggiungere funzionalità di backup e sincronizzazione cloud in fase avanzata.
+| Modulo | Priorità | Note | Hardware/Software |
+|--------|----------|------|-----------------|
+| Classificazione Scene | Alta | Primo step per titolazione | Edge TPU |
+| Riconoscimento Volti | Alta | Necessario per titoli familiari | Edge TPU |
+| Valutazione Qualità | Media | Utile per filtrare foto migliori | Edge TPU |
+| Captioning / Titolo | Bassa | Step opzionale | TPU consigliata, CPU fallback |
+| Interfaccia Web | Media | Navigazione e gestione | FastAPI/Flask + React |
 
 ---
 
-## **9. Roadmap**
-1. MVP con caricamento foto, riconoscimento scena/volti e Web UI base.
-2. Analisi qualità foto, titoli avanzati, tagging interattivo.
-3. Suggerimenti automatici, dashboard statistiche, apprendimento volti incrementale.
+## Suggerimenti hardware/software
+- **Fotocamera:** Sony A7 II  
+- **TPU:** Google Coral USB o PCIe  
+- **Ambiente Python:** 3.11+, TensorFlow Lite  
+- **Database volti/foto:** SQLite o PostgreSQL locale  
+- **Sistema operativo consigliato:** Linux o Windows 10/11
+
+---
+
+## README sintetico per GitHub
+
+### PhotoFamily Catalog
+Catalogo intelligente di foto reflex con AI per titolazione e riconoscimento volti familiari.
+
+**Funzionalità principali:**
+- Classificazione automatica scene
+- Riconoscimento volti familiari
+- Valutazione qualità foto
+- Generazione titolo automatico
+- Interfaccia web per gestione e navigazione
+
+**Prerequisiti:**
+- Python 3.11+
+- Google Coral TPU
+- TensorFlow Lite
+- FastAPI / Flask + React (opzionale per interfaccia web)
+
+**Installazione:**
+```bash
+git clone <repo-url>
+cd PhotoFamilyCatalog
+pip install -r requirements.txt
