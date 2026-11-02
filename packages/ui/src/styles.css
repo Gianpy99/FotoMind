@@ -973,6 +973,26 @@ svg.lucide.fm-star-on {
   font-weight: 400;
 }
 
+/* Nesting: year › month › week/day. Sub-sections are indented under their parent's chevron. */
+.fm-group-depth-0 > .fm-group-head {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 20px;
+}
+
+.fm-group-depth-1 > .fm-group-head {
+  font-size: var(--text-section);
+}
+
+.fm-group-depth-2 > .fm-group-head {
+  margin-bottom: var(--space-2);
+  font-size: var(--text-body);
+}
+
+.fm-group .fm-group {
+  margin-left: var(--space-4);
+}
+
 /* Section "select all": shown on hover/focus, while selecting, or when part of it is chosen. */
 .fm-group-select {
   width: 16px;

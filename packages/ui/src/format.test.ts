@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupKey, groupLabel, isoWeek } from "./format";
+import { groupKey, groupLabel, groupPath, isoWeek } from "./format";
 
 // Local-time timestamps (no zone suffix) so the results do not depend on the test machine's zone.
 describe("date grouping", () => {
@@ -21,6 +21,17 @@ describe("date grouping", () => {
     expect(groupKey(at, "week")).toBe("2020-W29");
     expect(groupKey(at, "day")).toBe("2020-07-14");
     expect(groupKey("not a date", "day")).toBe("unknown");
+  });
+
+  it("nests sections as year › month › week or day", () => {
+    const keys = (by: "month" | "week" | "day") =>
+      groupPath("2020-07-27T10:00:00", by).map((level) => level.key);
+    expect(keys("month")).toEqual(["2020", "2020-07"]);
+    expect(keys("week")).toEqual(["2020", "2020-07", "2020-07/2020-W31"]);
+    expect(keys("day")).toEqual(["2020", "2020-07", "2020-07/2020-07-27"]);
+    // A week spanning months is split under each month.
+    expect(groupPath("2020-08-02T10:00:00", "week")[2]?.key).toBe("2020-08/2020-W31");
+    expect(groupPath("bad", "day")).toEqual([{ key: "unknown", label: "Unknown date" }]);
   });
 
   it("labels weeks with their number and date range", () => {

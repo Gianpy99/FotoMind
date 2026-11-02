@@ -368,23 +368,35 @@ describe("AppShell", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Group by" }), {
       target: { value: "week" },
     });
+    expect(screen.getByRole("heading", { level: 3, name: /2024/ })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 4, name: /2024/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /^CW 28 · / })).toBeTruthy();
     expect(localStorage.getItem("fotomind.groupBy")).toBe("week");
     fireEvent.change(screen.getByRole("combobox", { name: "Group by" }), {
       target: { value: "day" },
     });
+    const sectionSelects = () => screen.getAllByRole("checkbox", { name: /^Select all in / });
+    // Year › month › day.
+    expect(sectionSelects()).toHaveLength(3);
 
     // The only loaded day may continue on the next page: selecting it pages in the rest.
-    const [daySelect] = screen.getAllByRole("checkbox", { name: /^Select all in / });
-    fireEvent.click(daySelect!);
+    fireEvent.click(sectionSelects()[2]!);
     const bar = await screen.findByRole("toolbar", { name: "Selection" });
     expect(await within(bar).findByText("3 selected")).toBeTruthy();
     expect(listAssets).toHaveBeenLastCalledWith(expect.objectContaining({ cursor: "c2" }));
-    expect(screen.getAllByRole("checkbox", { name: /^Select all in / })).toHaveLength(2);
+    // Now also a June month and day.
+    expect(sectionSelects()).toHaveLength(5);
 
-    // Ticked again: deselects only that day.
-    fireEvent.click(screen.getAllByRole("checkbox", { name: /^Select all in / })[0]!);
+    // The whole year, then ticked again to clear it.
+    fireEvent.click(sectionSelects()[0]!);
+    expect(await within(bar).findByText("4 selected")).toBeTruthy();
+    fireEvent.click(sectionSelects()[0]!);
     expect(screen.queryByRole("toolbar", { name: "Selection" })).toBeNull();
+
+    // Collapsing the year hides everything under it.
+    fireEvent.click(screen.getByRole("button", { name: "2024", expanded: true }));
+    expect(sectionSelects()).toHaveLength(1);
+    expect(screen.queryByTitle("IMG_1.jpg")).toBeNull();
   });
 
   it("edits info on a selection: shifts the date and sets a place", async () => {

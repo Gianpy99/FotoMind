@@ -75,8 +75,9 @@ Topology differences from the PRD are covered in [ADR-0001](adr/0001-hybrid-depl
 - ✅ 4.12 Edit info, single and bulk (LIB-007/008): title, description, date set or shift (camera
   clock fix), location set/remove, camera/lens; catalogue-only, survives rescans, "edited" marks and
   per-field restore from the file
-- ✅ 4.13 Timeline grouping by month, ISO calendar week (CW) or day (remembered per device), with a
-  "select all" per section that also pages in the rest of a section split across pages
+- ✅ 4.13 Timeline nested as collapsible year › month › (ISO calendar week (CW) or day), grouping
+  remembered per device, with a "select all" at every level that also pages in the rest of a
+  section split across pages
 
 ## EPIC 5: Search
 

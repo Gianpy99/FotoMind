@@ -39,8 +39,7 @@ import {
   errorMessage,
   fileFormat,
   formatDuration,
-  groupKey,
-  groupLabel,
+  groupPath,
   isRawFormat,
   yearRange,
   type GroupBy,
@@ -100,10 +99,13 @@ function storedTileSize(): number {
   }
 }
 
+/** A collapsible timeline section; `items` holds everything inside it, nested or not. */
 interface Group {
   key: string;
   label: string;
+  depth: number;
   items: { asset: AssetSummary; index: number }[];
+  children: Group[];
 }
 
 const GROUP_BY_KEY = "fotomind.groupBy";
@@ -119,17 +121,20 @@ function storedGroupBy(): GroupBy {
 }
 
 function groupItems(items: AssetSummary[], by: GroupBy): Group[] {
-  const groups: Group[] = [];
+  const roots: Group[] = [];
   items.forEach((asset, index) => {
-    const key = groupKey(asset.sort_at, by);
-    let group = groups[groups.length - 1];
-    if (!group || group.key !== key) {
-      group = { key, label: groupLabel(asset.sort_at, by), items: [] };
-      groups.push(group);
-    }
-    group.items.push({ asset, index });
+    let siblings = roots;
+    groupPath(asset.sort_at, by).forEach((level, depth) => {
+      let group = siblings[siblings.length - 1];
+      if (!group || group.key !== level.key) {
+        group = { ...level, depth, items: [], children: [] };
+        siblings.push(group);
+      }
+      group.items.push({ asset, index });
+      siblings = group.children;
+    });
   });
-  return groups;
+  return roots;
 }
 
 export function LibraryView({
@@ -305,7 +310,7 @@ export function LibraryView({
   }
 
   /** Pages in the rest of a section that continues past the loaded items; returns its new ids. */
-  async function loadRestOfGroup(key: string): Promise<string[]> {
+  async function loadRestOfGroup(group: Group): Promise<string[]> {
     const ids: string[] = [];
     let cursor = state.cursor;
     while (cursor) {
@@ -318,7 +323,9 @@ export function LibraryView({
         loading: false,
         error: null,
       }));
-      const inGroup = page.items.filter((a) => groupKey(a.sort_at, groupBy) === key);
+      const inGroup = page.items.filter(
+        (a) => groupPath(a.sort_at, groupBy)[group.depth]?.key === group.key,
+      );
       ids.push(...inGroup.map((a) => a.id));
       if (inGroup.length < page.items.length) break;
     }
@@ -338,7 +345,7 @@ export function LibraryView({
     if (more) {
       setBusy(true);
       try {
-        ids.push(...(await loadRestOfGroup(group.key)));
+        ids.push(...(await loadRestOfGroup(group)));
       } catch (err) {
         setNotice(`Could not load all of ${group.label}: ${errorMessage(err)}`);
       } finally {
@@ -702,16 +709,18 @@ export function LibraryView({
           </div>
         )}
 
-        {groups.map((group, groupIndex) => {
+        {groups.map(function renderGroup(group: Group): ReactNode {
           const isCollapsed = collapsed.has(group.key);
-          // The last loaded section may continue on the next page.
-          const more = groupIndex === groups.length - 1 && state.cursor != null;
+          // The section holding the last loaded item may continue on the next page.
+          const more =
+            state.cursor != null && group.items[group.items.length - 1]?.index === items.length - 1;
           const selectedHere = group.items.filter(({ asset }) => selected.has(asset.id)).length;
           const allSelected = selectedHere === group.items.length && !more;
           const count = `${group.items.length}${more ? "+" : ""}`;
+          const Heading = group.depth === 0 ? "h3" : group.depth === 1 ? "h4" : "h5";
           return (
-            <div key={group.key} className="fm-group">
-              <h3
+            <div key={group.key} className={`fm-group fm-group-depth-${group.depth}`}>
+              <Heading
                 className={
                   selectedHere > 0 ? "fm-group-head fm-group-head-selected" : "fm-group-head"
                 }
@@ -747,8 +756,9 @@ export function LibraryView({
                 <span className="fm-muted fm-num" aria-hidden="true">
                   {selectedHere > 0 ? `${selectedHere} of ${count}` : count}
                 </span>
-              </h3>
-              {!isCollapsed && (
+              </Heading>
+              {!isCollapsed && group.children.length > 0 && group.children.map(renderGroup)}
+              {!isCollapsed && group.children.length === 0 && (
                 <ul className={selecting ? "fm-grid fm-selecting" : "fm-grid"}>
                   {group.items.map(({ asset }) => {
                     const isSelected = selected.has(asset.id);

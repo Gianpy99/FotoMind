@@ -122,6 +122,30 @@ export function groupLabel(value: string, by: GroupBy): string {
   return `CW ${week} · ${monday.toLocaleDateString(undefined, short)} – ${end}`;
 }
 
+export interface GroupLevel {
+  key: string;
+  label: string;
+}
+
+/**
+ * Nested sections for a timestamp: year › month, plus › week or › day. Weeks sit under the
+ * month of each photo's own date, so a week spanning two months shows in both.
+ */
+export function groupPath(value: string, by: GroupBy): GroupLevel[] {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return [{ key: "unknown", label: "Unknown date" }];
+  const year = String(date.getFullYear());
+  const month = monthKey(value);
+  const path = [
+    { key: year, label: year },
+    { key: month, label: monthLabel(value) },
+  ];
+  if (by !== "month") {
+    path.push({ key: `${month}/${groupKey(value, by)}`, label: groupLabel(value, by) });
+  }
+  return path;
+}
+
 export function plural(count: number, word: string): string {
   return `${count} ${word}${count === 1 ? "" : "s"}`;
 }
