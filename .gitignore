@@ -1,0 +1,40 @@
+# Secrets / local config
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Node / frontend
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Tauri / Rust
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+
+# Runtime data, caches and media: never commit personal photos (PRD §11, 9.11)
+.data/
+data/
+var/
+*.cr2
+*.CR2
+*.arw
+*.ARW
+tests/fixtures/private/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+*.log

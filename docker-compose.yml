@@ -1,0 +1,25 @@
+# Pi development space only (~/apps/fotomind/src, via scripts/pi-check.ps1 -Run).
+# Not used on the Windows PC and not used for production (Jenkinsfile deploys "fotomind").
+# The Pi has the standalone docker-compose 1.29, so keep this file v1-compatible.
+#
+# Runs the dev container on 127.0.0.1:18097 (outside the 8090-8099 portal range) against the
+# fotomind_dev database on the Pi's native PostgreSQL (DATABASE_URL in ~/apps/fotomind/.env).
+services:
+  fotomind:
+    build: .
+    image: fotomind:dev
+    container_name: fotomind-dev
+    restart: "no"
+    ports:
+      - "127.0.0.1:18097:8000"
+    env_file:
+      - .env
+    environment:
+      # No Caddy in front of the dev container: development mode with DEV_USER.
+      APP_ENV: development
+      DEV_USER: dev
+    volumes:
+      - fotomind-dev-data:/app/data
+
+volumes:
+  fotomind-dev-data:

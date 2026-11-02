@@ -1,0 +1,10 @@
+dist
+node_modules
+.venv
+.data
+apps/desktop/src-tauri/target
+apps/desktop/src-tauri/gen
+packages/api-client/openapi.json
+packages/api-client/src/schema.d.ts
+package-lock.json
+*.docx
