@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { CurrentUser, FotoMindClient } from "@fotomind/api-client";
+import { AlbumsView } from "./AlbumsView";
 import { LibraryView } from "./LibraryView";
 import { SourcesView } from "./SourcesView";
 import { errorMessage } from "./format";
@@ -10,12 +11,11 @@ export interface AppShellProps {
   surface: string;
 }
 
-type Section = "library" | "sources";
+type Section = "library" | "albums" | "sources";
 
 const SECTIONS: { id: Section | null; label: string }[] = [
   { id: "library", label: "Library" },
-  { id: null, label: "Search" },
-  { id: null, label: "Albums" },
+  { id: "albums", label: "Albums" },
   { id: null, label: "People" },
   { id: "sources", label: "Sources & jobs" },
   { id: null, label: "Backup" },
@@ -72,6 +72,8 @@ export function AppShell({ client, surface }: AppShellProps) {
           </p>
         ) : section === "library" ? (
           <LibraryView client={client} />
+        ) : section === "albums" ? (
+          <AlbumsView client={client} />
         ) : (
           <SourcesView client={client} />
         )}

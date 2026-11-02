@@ -366,11 +366,252 @@ button {
   font: inherit;
 }
 
-.fm-main button:not(.fm-tile, .fm-viewer-nav, .fm-viewer-head button) {
+.fm-main
+  button:not(
+    .fm-tile,
+    .fm-viewer-nav,
+    .fm-viewer-head button,
+    .fm-star,
+    .fm-chip button,
+    .fm-album-card
+  ) {
   padding: 0.3rem 0.8rem;
   border-radius: 6px;
   border: 1px solid var(--fm-border);
   background: transparent;
   color: inherit;
   cursor: pointer;
+}
+
+.fm-main button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.fm-danger {
+  border-color: #d64545 !important;
+  color: #d64545 !important;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--fm-border);
+  background: transparent;
+  color: inherit;
+}
+
+select option {
+  color: initial;
+}
+
+.fm-filters,
+.fm-bulkbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.fm-filters input[type="search"] {
+  flex: 1 1 16rem;
+  min-width: 12rem;
+}
+
+.fm-bulkbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--fm-accent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--fm-accent) 12%, Canvas);
+}
+
+.fm-bulk-group,
+.fm-inline-form {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.fm-notice {
+  margin: -0.5rem 0 1rem;
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
+.fm-tile-wrap {
+  position: relative;
+}
+
+.fm-select {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.fm-tile-wrap:hover .fm-select,
+.fm-select:focus-visible,
+.fm-selecting .fm-select {
+  opacity: 1;
+}
+
+.fm-selected .fm-tile {
+  outline: 3px solid var(--fm-accent);
+  outline-offset: -3px;
+}
+
+.fm-selected .fm-tile img {
+  transform: scale(0.94);
+}
+
+.fm-badge-rating {
+  left: 6px;
+  right: auto;
+  color: #facc15;
+  letter-spacing: -1px;
+}
+
+.fm-stars {
+  display: inline-flex;
+  margin: 0.5rem 0 0.25rem;
+}
+
+.fm-star {
+  padding: 0 0.1rem;
+  border: 0;
+  background: transparent;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: rgb(255 255 255 / 30%);
+  cursor: pointer;
+}
+
+.fm-star-on {
+  color: #facc15;
+}
+
+.fm-star:focus-visible {
+  outline: 2px solid var(--fm-accent);
+  border-radius: 4px;
+}
+
+.fm-chips {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0;
+  margin: 0 0 0.5rem;
+}
+
+.fm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0 0.2rem 0 0.55rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  background: rgb(255 255 255 / 12%);
+}
+
+.fm-chip:not(:has(button)) {
+  padding-right: 0.55rem;
+}
+
+.fm-chip button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.fm-viewer input,
+.fm-viewer select {
+  border-color: rgb(255 255 255 / 25%);
+}
+
+.fm-viewer .fm-inline-form button {
+  padding: 0.3rem 0.8rem;
+  border-radius: 6px;
+  border: 1px solid rgb(255 255 255 / 25%);
+  background: transparent;
+  color: inherit;
+}
+
+.fm-album-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.fm-album-card {
+  display: grid;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fm-album-card img,
+.fm-album-card .fm-tile-placeholder {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 8px;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.fm-album-card:focus-visible {
+  outline: 3px solid var(--fm-accent);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.fm-album-name {
+  font-weight: 600;
+  margin-top: 0.3rem;
+}
+
+.fm-album-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.fm-album-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.fm-exclusions {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 44rem;
+}
+
+.fm-exclusions textarea {
+  font-family: ui-monospace, Consolas, monospace;
 }

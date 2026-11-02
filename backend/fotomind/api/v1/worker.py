@@ -40,6 +40,13 @@ class RegisterRoot(BaseModel):
     volume_id: Annotated[str, StringConstraints(max_length=64)] | None = None
 
 
+class RelocateRoot(BaseModel):
+    """The folder moved (new drive letter, renamed parent): keep its catalogue, change the path."""
+
+    path: Annotated[str, StringConstraints(min_length=1, max_length=4096)]
+    volume_id: Annotated[str, StringConstraints(max_length=64)] | None = None
+
+
 class KnownFile(BaseModel):
     relative_path: str
     size_bytes: int
@@ -109,6 +116,26 @@ def register_root(body: RegisterRoot, db: DbDep, _worker: WorkerDep) -> StorageR
 @router.get("/storage-roots", response_model=list[StorageRootOut])
 def list_host_roots(host: str, db: DbDep, _worker: WorkerDep) -> list[StorageRootOut]:
     return roots_with_counts(db, host)
+
+
+@router.patch("/storage-roots/{root_id}", response_model=StorageRootOut)
+def relocate_root(
+    root_id: uuid.UUID, body: RelocateRoot, db: DbDep, _worker: WorkerDep
+) -> StorageRootOut:
+    root = _root_or_404(db, root_id)
+    clash = db.scalar(
+        select(StorageRoot.id).where(
+            StorageRoot.host == root.host, StorageRoot.path == body.path, StorageRoot.id != root.id
+        )
+    )
+    if clash is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Another root already uses that path")
+    root.path = body.path
+    if body.volume_id is not None:
+        root.volume_id = body.volume_id
+    db.commit()
+    logger.info("root.relocated", extra={"root_id": str(root.id), "path": root.path})
+    return next(r for r in roots_with_counts(db, root.host) if r.id == root.id)
 
 
 @router.get("/storage-roots/{root_id}/files", response_model=list[KnownFile])
@@ -212,7 +239,9 @@ def job_progress(
 
 
 @router.post("/jobs/{job_id}/complete", response_model=JobOut)
-def job_complete(job_id: uuid.UUID, body: CompleteReport, db: DbDep, _worker: WorkerDep) -> JobOut:
+def job_complete(
+    job_id: uuid.UUID, body: CompleteReport, db: DbDep, thumbs: ThumbsDep, _worker: WorkerDep
+) -> JobOut:
     job = _job_or_404(db, job_id)
     now = datetime.now(UTC)
     result = dict(body.result)
@@ -223,14 +252,21 @@ def job_complete(job_id: uuid.UUID, body: CompleteReport, db: DbDep, _worker: Wo
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 
     root = db.get(StorageRoot, job.storage_root_id) if job.storage_root_id else None
+    removed_assets: list[uuid.UUID] = []
     if job.job_type == JobType.SCAN_ROOT and root is not None:
         if body.root_offline:
             mark_root_offline(db, root)
         elif was_running and body.succeeded and job.started_at is not None:
             # Only a complete, uncancelled scan may conclude that unseen files are missing.
-            result["missing"] = finish_scan(db, root, job.started_at, now)
+            outcome = finish_scan(db, root, job.started_at, now)
+            result["missing"] = outcome.missing
+            if outcome.excluded:
+                result["excluded"] = outcome.excluded
+            removed_assets = outcome.removed_asset_ids
             job.result = result
     db.commit()
+    for asset_id in removed_assets:
+        thumbs.delete(asset_id)
     logger.info(
         "job.finished",
         extra={"job_id": str(job.id), "status": str(job.status), "result": job.result},

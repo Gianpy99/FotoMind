@@ -27,6 +27,10 @@ class WorkerApi:
         resp = self.client.get("/api/v1/worker/storage-roots", params={"host": host})
         return self._json(resp)
 
+    def relocate_root(self, root_id: str, path: str, volume_id: str | None) -> dict:
+        body = {"path": path, "volume_id": volume_id}
+        return self._json(self.client.patch(f"/api/v1/worker/storage-roots/{root_id}", json=body))
+
     def known_files(self, root_id: str) -> list[dict]:
         return self._json(self.client.get(f"/api/v1/worker/storage-roots/{root_id}/files"))
 

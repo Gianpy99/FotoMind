@@ -31,6 +31,8 @@ SUPPORTED: dict[str, MediaKind] = {
     ".jpg": MediaKind("image/jpeg", AssetType.PHOTO, MediaFileRole.ORIGINAL, "image"),
     ".jpeg": MediaKind("image/jpeg", AssetType.PHOTO, MediaFileRole.ORIGINAL, "image"),
     ".png": MediaKind("image/png", AssetType.PHOTO, MediaFileRole.ORIGINAL, "image"),
+    ".tif": MediaKind("image/tiff", AssetType.PHOTO, MediaFileRole.ORIGINAL, "image"),
+    ".tiff": MediaKind("image/tiff", AssetType.PHOTO, MediaFileRole.ORIGINAL, "image"),
     ".cr2": MediaKind("image/x-canon-cr2", AssetType.PHOTO, MediaFileRole.RAW_ORIGINAL, "raw"),
     ".cr3": MediaKind("image/x-canon-cr3", AssetType.PHOTO, MediaFileRole.RAW_ORIGINAL, "raw"),
     ".arw": MediaKind("image/x-sony-arw", AssetType.PHOTO, MediaFileRole.RAW_ORIGINAL, "raw"),
@@ -158,7 +160,12 @@ def _pillow_exif_fields(exif: Any) -> dict[str, Any]:
 def render_thumbnail(img: Any, size_px: int) -> bytes:
     from PIL import Image
 
-    if img.mode in ("RGBA", "LA", "P"):
+    if img.mode in ("I", "F") or img.mode.startswith("I;16"):
+        # 16-bit / float greyscale (scanned TIFFs): scale to 8 bits instead of clipping to white.
+        low, high = img.convert("F").getextrema()
+        scale = 255.0 / (high - low) if high > low else 1.0
+        img = img.convert("F").point(lambda v: (v - low) * scale).convert("L")
+    if img.mode in ("RGBA", "LA", "P", "PA"):
         img = img.convert("RGBA")
         background = Image.new("RGB", img.size, (255, 255, 255))
         background.paste(img, mask=img.getchannel("A"))
@@ -309,6 +316,17 @@ def _extract_video(path: Path, size_px: int) -> Extracted:
             out.metadata["video_codec"] = codec
         if stream.average_rate:
             out.metadata["fps"] = round(float(stream.average_rate), 2)
+        if container.bit_rate:
+            out.metadata["bitrate_kbps"] = round(container.bit_rate / 1000)
+        audio = next(iter(container.streams.audio), None)
+        out.metadata["has_audio"] = audio is not None
+        if audio is not None:
+            audio_codec = clean_text(audio.codec_context.name, 40)
+            if audio_codec:
+                out.metadata["audio_codec"] = audio_codec
+            channels = getattr(audio.codec_context, "channels", None)
+            if channels:
+                out.metadata["audio_channels"] = int(channels)
 
         target = min(1.0, (out.duration_s or 0) * 0.1)
         if target > 0 and stream.time_base:

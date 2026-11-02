@@ -70,4 +70,40 @@ describe("createClient", () => {
     );
     expect(client.url("/api/v1/assets/x/thumbnail")).toBe("http://api/api/v1/assets/x/thumbnail");
   });
+
+  it("repeats array filters", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ items: [], total: 0, next_cursor: null }));
+    const client = createClient("", fetchMock as typeof fetch);
+
+    await client.listAssets({ q: "rome 2023", tag: ["family", "trip"], sort: "oldest" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/assets?q=rome+2023&tag=family&tag=trip&sort=oldest",
+      expect.anything(),
+    );
+  });
+
+  it("sends JSON bodies and handles 204 responses", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ id: "a1", rating: 4 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const client = createClient("", fetchMock as unknown as typeof fetch);
+
+    await expect(client.updateAsset("a1", { rating: 4 })).resolves.toMatchObject({ rating: 4 });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/v1/assets/a1",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ rating: 4 }),
+        headers: expect.objectContaining({ "Content-Type": "application/json" }),
+      }),
+    );
+    await expect(client.deleteAlbum("al1")).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/albums/al1",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
 });

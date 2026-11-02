@@ -6,11 +6,12 @@ import os
 import sys
 import time
 from collections import Counter
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from fotomind.modules.storage.paths import is_excluded
 from fotomind.workers.api import WorkerApi
 from fotomind.workers.config import WorkerSettings
 from fotomind.workers.media import MediaKind, extract, kind_for, sha256_file
@@ -23,10 +24,13 @@ MAX_ERROR_SAMPLES = 20
 PROGRESS_EVERY_S = 2.0
 
 
-def iter_media(root: Path) -> Iterator[tuple[Path, str, MediaKind]]:
+def iter_media(
+    root: Path, exclude_patterns: Sequence[str] = ()
+) -> Iterator[tuple[Path, str, MediaKind]]:
     """Yield (absolute path, POSIX path relative to root, kind) for supported files.
 
-    Symlinks and junctions are not followed, so a scan never leaves the root.
+    Symlinks and junctions are not followed, so a scan never leaves the root. Folders and
+    files matching the root's exclusion patterns are skipped (LIB-003).
     """
     for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
         current = Path(dirpath)
@@ -37,6 +41,10 @@ def iter_media(root: Path) -> Iterator[tuple[Path, str, MediaKind]]:
             and d.lower() not in _SKIP_DIRS
             and not os.path.islink(current / d)
             and not os.path.isjunction(current / d)
+            and not (
+                exclude_patterns
+                and is_excluded((current / d).relative_to(root).as_posix(), exclude_patterns)
+            )
         )
         for name in sorted(filenames):
             if name.startswith((".", "~")):
@@ -45,7 +53,10 @@ def iter_media(root: Path) -> Iterator[tuple[Path, str, MediaKind]]:
             kind = kind_for(path)
             if kind is None or path.is_symlink():
                 continue
-            yield path, path.relative_to(root).as_posix(), kind
+            rel = path.relative_to(root).as_posix()
+            if exclude_patterns and is_excluded(rel, exclude_patterns):
+                continue
+            yield path, rel, kind
 
 
 def volume_id_for(path: Path) -> str | None:
@@ -119,7 +130,7 @@ def run_scan_job(
         )
 
     known = {f["relative_path"]: f for f in api.known_files(root["id"])}
-    candidates = list(iter_media(root_path))
+    candidates = list(iter_media(root_path, root.get("exclude_patterns") or []))
     total = len(candidates)
     stats: Counter[str] = Counter()
     errors: list[str] = []

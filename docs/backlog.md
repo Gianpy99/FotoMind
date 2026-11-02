@@ -28,7 +28,8 @@ Topology differences from the PRD are covered in [ADR-0001](adr/0001-hybrid-depl
 - ✅ 2.1 Dedicated `fotomind` DB/user on the Pi ([script](../deployment/raspberry-pi/create-database.sql)) +
   dev/test DBs for the `fotomind_dev` role ([script](../deployment/raspberry-pi/create-dev-databases.sql))
 - ✅ 2.2 Network policy (`pg_hba`, LAN only)
-- ✅ 2.3 SQLAlchemy models + migration `0002_catalog` (storage_root, media_asset, media_file, job; ADR-0002)
+- ✅ 2.3 SQLAlchemy models + migrations `0002_catalog` (storage_root, media_asset, media_file, job; ADR-0002)
+  and `0003_organise` (tag, asset_tag, album, album_asset, root exclusions, trigram indexes)
 - ✅ 2.4 Alembic baseline (`pg_trgm`)
 - ✅ 2.5 Health/readiness checks
 - ⬜ 2.6 pgvector spike (ADR-0006)
@@ -40,11 +41,15 @@ Topology differences from the PRD are covered in [ADR-0001](adr/0001-hybrid-depl
 - ✅ 3.1 Storage-root registration (`fotomind-worker roots add`)
 - ✅ 3.2 Volume identity (Windows volume serial)
 - ✅ 3.3 Path normalisation/security (relative POSIX paths, no `..`/drives)
-- ✅ 3.4 Scanner (JPEG, PNG, CR2/CR3, ARW, MP4/MOV; incremental by size+mtime)
+- ✅ 3.4 Scanner (JPEG, PNG, TIFF incl. 16-bit, CR2/CR3, ARW, MP4/MOV; incremental by size+mtime)
+- ✅ 3.4b Per-root exclusion patterns (LIB-003; editable in Sources, pruned during scan, excluded files
+  removed from the catalogue)
+- ✅ 3.4c Root relocation (`fotomind-worker roots move <root> <new path>`) keeps catalogue state
 - ✅ 3.5 Restartable import jobs (queue, claim with `SKIP LOCKED`, heartbeat, stale reclaim, cancel)
 - ✅ 3.6 SHA-256 per file
 - 🟡 3.7 Duplicates: identical content shares one asset and moves are tracked; RAW+JPEG pairing todo
-- ✅ 3.8 EXIF (capture time, camera, lens, dimensions, orientation; video duration/creation time)
+- ✅ 3.8 EXIF (capture time, camera, lens, exposure, dimensions, orientation; video duration, codec,
+  bitrate, audio, creation time; VID-002/005)
 - 🟡 3.9 Thumbnails (512 px JPEG uploaded to the Pi data volume); larger previews todo
 - ✅ 3.10 Missing-file detection (unseen files → `missing`; offline root → `offline`)
 
@@ -53,15 +58,18 @@ Topology differences from the PRD are covered in [ADR-0001](adr/0001-hybrid-depl
 - ✅ 4.1 Grid
 - 🟡 4.2 Viewer (thumbnail only; full resolution needs the PC)
 - ✅ 4.3 Metadata panel
-- 🟡 4.4 Filters/sort/pagination (type filter, newest first, cursor paging)
-- ⬜ 4.5 Ratings/tags · ⬜ 4.6 Albums
+- ✅ 4.4 Filters/sort/pagination (search, type, min rating, tag, camera, year, album; newest/oldest;
+  paging)
+- ✅ 4.5 Ratings (0–5 stars, keys 0–5 in the viewer) and tags (case-insensitive), single + bulk edit
+- ✅ 4.6 Albums (create/rename/delete, add/remove in bulk, cover; never deletes media)
 - ✅ 4.7 Job progress UI (Sources & jobs)
 - ✅ 4.8 LAN/remote web access (photos.borrellofamily.co.uk via the portal)
 - ✅ 4.9 Keyboard navigation (←/→/Esc in the viewer)
 
 ## EPIC 5: Search
 
-⬜ 5.1 Metadata query API · 5.2 Full-text/trigram · 5.3 Embedding benchmark · 5.4 Embedding worker ·
+✅ 5.1 Metadata query API (`/assets?q=…` + facets) · 🟡 5.2 Full-text/trigram (ILIKE over name, camera,
+lens, path, tags with `pg_trgm` indexes; ranking todo) · ⬜ 5.3 Embedding benchmark · 5.4 Embedding worker ·
 5.5 Vector storage/search · 5.6 Semantic search UI · 5.7 Reindex strategy
 
 ## EPIC 6: RAW and conventional development

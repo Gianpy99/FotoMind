@@ -51,6 +51,10 @@ Check connectivity and authentication:
 .\.venv\Scripts\fotomind-worker scan
 .\.venv\Scripts\fotomind-worker scan Photos
 
+# The folder moved (new disk, new parent folder)? Point the root at the new location.
+# Ratings, tags and albums are kept; run a scan afterwards.
+.\.venv\Scripts\fotomind-worker roots move Photos "E:\Archive\Photos"
+
 # Long-running mode: picks up "Scan now" requests made in the web UI
 .\.venv\Scripts\fotomind-worker run
 ```
@@ -58,7 +62,12 @@ Check connectivity and authentication:
 What a scan does:
 
 - Walks the root (read-only), skipping hidden/system folders, symlinks and junctions.
-- Supported: JPEG, PNG, CR2, CR3, ARW, MP4, MOV.
+- Supported: JPEG, PNG, TIFF, CR2, CR3, ARW, MP4, MOV.
+- Exclusion patterns (set per root in the web UI under **Sources & jobs**) skip matching
+  folders/files, e.g. `Exports`, `*.tmp` or `2019/Scans/*`. A pattern without `/` matches
+  any folder or file name; one with `/` matches from the root. Matching is
+  case-insensitive. Files already catalogued that become excluded are removed from the
+  library on the next scan (the originals are untouched).
 - New or changed files (by size + mtime) are hashed (SHA-256). EXIF/video metadata is
   extracted and a 512 px JPEG thumbnail is uploaded to the Pi. Originals never leave the
   PC.

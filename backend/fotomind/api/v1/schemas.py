@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from fotomind.domain.enums import (
     AssetType,
@@ -27,6 +27,7 @@ class StorageRootOut(_Orm):
     path: str
     volume_id: str | None
     availability: Availability
+    exclude_patterns: list[str] = []
     last_scan_at: datetime | None
     created_at: datetime
     file_count: int = 0
@@ -63,8 +64,14 @@ class AssetSummary(_Orm):
     duration_s: float | None
     rating: int
     availability: Availability
+    tags: list[str] = []
     # Relative to the API origin; versioned by content so browsers can cache it forever.
     thumbnail_url: str | None = None
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def _tag_names(cls, value: Any) -> Any:
+        return [getattr(t, "name", t) for t in value or []]
 
     @classmethod
     def from_asset(cls, asset: MediaAsset) -> "AssetSummary":
@@ -88,15 +95,23 @@ class MediaFileOut(_Orm):
     last_seen_at: datetime
 
 
+class AlbumRef(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
 class AssetDetail(AssetSummary):
     camera_make: str | None
     camera_model: str | None
     lens_model: str | None
     metadata: dict[str, Any]
     files: list[MediaFileOut]
+    albums: list[AlbumRef] = []
 
     @classmethod
-    def from_asset(cls, asset: MediaAsset) -> "AssetDetail":
+    def from_asset(  # type: ignore[override]
+        cls, asset: MediaAsset, albums: list[AlbumRef] | None = None
+    ) -> "AssetDetail":
         files = [
             MediaFileOut(
                 id=f.id,
@@ -122,6 +137,7 @@ class AssetDetail(AssetSummary):
             lens_model=asset.lens_model,
             metadata=asset.metadata_,
             files=files,
+            albums=albums or [],
         )
 
 
@@ -129,6 +145,32 @@ class AssetPage(BaseModel):
     items: list[AssetSummary]
     total: int
     next_cursor: str | None
+
+
+class FacetValue(BaseModel):
+    value: str
+    count: int
+
+
+class LibraryFacets(BaseModel):
+    """Values present in the library, for the filter bar."""
+
+    cameras: list[FacetValue]
+    tags: list[FacetValue]
+    years: list[FacetValue]
+    total: int
+
+
+class AlbumOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    description: str | None
+    cover_asset_id: uuid.UUID | None
+    cover_thumbnail_url: str | None
+    asset_count: int
+    created_by: str | None
+    created_at: datetime
+    updated_at: datetime
 
 
 def thumbnail_url(asset: MediaAsset) -> str | None:

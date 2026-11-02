@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import type { FotoMindClient, Job, StorageRoot, SystemStatus } from "@fotomind/api-client";
 import { errorMessage, formatDate } from "./format";
 
@@ -17,11 +17,61 @@ function jobProgress(job: Job): string {
   return job.progress_done ? `${job.progress_done}` : "";
 }
 
+interface ExclusionEditorProps {
+  root: StorageRoot;
+  onSave(patterns: string[]): Promise<void>;
+  onCancel(): void;
+}
+
+function ExclusionEditor({ root, onSave, onCancel }: ExclusionEditorProps) {
+  const [text, setText] = useState((root.exclude_patterns ?? []).join("\n"));
+  const [saving, setSaving] = useState(false);
+  const id = `fm-exclude-${root.id}`;
+  return (
+    <form
+      className="fm-exclusions"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setSaving(true);
+        const patterns = text
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
+        void onSave(patterns).finally(() => setSaving(false));
+      }}
+    >
+      <label htmlFor={id}>Skip these folders/files when scanning {root.label}, one per line:</label>
+      <textarea
+        id={id}
+        rows={5}
+        value={text}
+        placeholder={"@eaDir\n*.tmp\nPrivate/2019*"}
+        onChange={(e) => setText(e.target.value)}
+      />
+      <p className="fm-muted fm-small">
+        A name without “/” (e.g. <code>Thumbs</code>, <code>*.edit.jpg</code>) matches anywhere; a
+        path with “/” (e.g. <code>Private/2019*</code>) matches from the top of this folder.
+        Case-insensitive. Already catalogued files that match leave the library on the next scan
+        (originals are untouched).
+      </p>
+      <div className="fm-inline-form">
+        <button type="submit" disabled={saving}>
+          {saving ? "Saving…" : "Save exclusions"}
+        </button>
+        <button type="button" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export function SourcesView({ client }: { client: FotoMindClient }) {
   const [roots, setRoots] = useState<StorageRoot[] | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
 
   const refresh = useCallback(
     () =>
@@ -96,37 +146,67 @@ export function SourcesView({ client }: { client: FotoMindClient }) {
               <th>Files</th>
               <th>Status</th>
               <th>Last scan</th>
+              <th>Exclusions</th>
               <th />
             </tr>
           </thead>
           <tbody>
             {roots.map((root) => {
               const busy = jobs.some((j) => isActive(j) && j.storage_root_id === root.id);
+              const patterns = root.exclude_patterns ?? [];
               return (
-                <tr key={root.id}>
-                  <td>
-                    <strong>{root.label}</strong>
-                    <div className="fm-muted fm-small">{root.path}</div>
-                  </td>
-                  <td>{root.host}</td>
-                  <td>
-                    {root.file_count}
-                    {root.missing_count > 0 && (
-                      <span className="fm-muted"> ({root.missing_count} missing)</span>
-                    )}
-                  </td>
-                  <td>{root.availability}</td>
-                  <td>{formatDate(root.last_scan_at)}</td>
-                  <td>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void act(() => client.scanRoot(root.id))}
-                    >
-                      {busy ? "Scanning…" : "Scan now"}
-                    </button>
-                  </td>
-                </tr>
+                <Fragment key={root.id}>
+                  <tr>
+                    <td>
+                      <strong>{root.label}</strong>
+                      <div className="fm-muted fm-small">{root.path}</div>
+                    </td>
+                    <td>{root.host}</td>
+                    <td>
+                      {root.file_count}
+                      {root.missing_count > 0 && (
+                        <span className="fm-muted"> ({root.missing_count} missing)</span>
+                      )}
+                    </td>
+                    <td>{root.availability}</td>
+                    <td>{formatDate(root.last_scan_at)}</td>
+                    <td>
+                      <button
+                        type="button"
+                        aria-expanded={editing === root.id}
+                        onClick={() => setEditing(editing === root.id ? null : root.id)}
+                        title={patterns.join(", ")}
+                      >
+                        {patterns.length ? `${patterns.length} rule(s)` : "None"} ✎
+                      </button>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void act(() => client.scanRoot(root.id))}
+                      >
+                        {busy ? "Scanning…" : "Scan now"}
+                      </button>
+                    </td>
+                  </tr>
+                  {editing === root.id && (
+                    <tr>
+                      <td colSpan={7}>
+                        <ExclusionEditor
+                          root={root}
+                          onCancel={() => setEditing(null)}
+                          onSave={(exclude_patterns) =>
+                            act(async () => {
+                              await client.updateRoot(root.id, { exclude_patterns });
+                              setEditing(null);
+                            })
+                          }
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               );
             })}
           </tbody>

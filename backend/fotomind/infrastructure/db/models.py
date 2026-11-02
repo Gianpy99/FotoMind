@@ -12,6 +12,7 @@ from typing import Any
 from sqlalchemy import (
     JSON,
     BigInteger,
+    Column,
     DateTime,
     Enum,
     Float,
@@ -20,9 +21,11 @@ from sqlalchemy import (
     Integer,
     SmallInteger,
     String,
+    Table,
     Text,
     UniqueConstraint,
     Uuid,
+    func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -37,6 +40,11 @@ from fotomind.domain.enums import (
 from fotomind.infrastructure.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 JsonDict = JSON().with_variant(JSONB(), "postgresql")
+
+
+def _trigram_index(name: str, column: str) -> Index:
+    # GIN trigram index for ILIKE '%term%' search on PostgreSQL (plain index elsewhere).
+    return Index(name, column, postgresql_using="gin", postgresql_ops={column: "gin_trgm_ops"})
 
 
 def _enum(cls: type[StrEnum]) -> Enum:
@@ -64,6 +72,8 @@ class StorageRoot(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     availability: Mapped[Availability] = mapped_column(
         _enum(Availability), default=Availability.ONLINE
     )
+    # Glob patterns skipped by the scanner (LIB-003); see modules.storage.paths.is_excluded.
+    exclude_patterns: Mapped[list[str]] = mapped_column(JsonDict, default=list)
     last_scan_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
@@ -71,7 +81,10 @@ class MediaAsset(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """The logical photo or video the user sees; backed by one or more media_file rows."""
 
     __tablename__ = "media_asset"
-    __table_args__ = (Index("ix_media_asset_sort", "sort_at", "id"),)
+    __table_args__ = (
+        Index("ix_media_asset_sort", "sort_at", "id"),
+        _trigram_index("ix_media_asset_display_name_trgm", "display_name"),
+    )
 
     asset_type: Mapped[AssetType] = mapped_column(_enum(AssetType))
     display_name: Mapped[str] = mapped_column(String(500))
@@ -95,6 +108,7 @@ class MediaAsset(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     files: Mapped[list["MediaFile"]] = relationship(
         back_populates="asset", cascade="all, delete-orphan", order_by="MediaFile.created_at"
     )
+    tags: Mapped[list["Tag"]] = relationship(secondary="asset_tag", order_by="Tag.name")
 
 
 class MediaFile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -103,6 +117,7 @@ class MediaFile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "media_file"
     __table_args__ = (
         UniqueConstraint("storage_root_id", "relative_path", name="uq_media_file_root_path"),
+        _trigram_index("ix_media_file_relative_path_trgm", "relative_path"),
     )
 
     asset_id: Mapped[uuid.UUID] = mapped_column(
@@ -154,3 +169,54 @@ class Job(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+asset_tag = Table(
+    "asset_tag",
+    Base.metadata,
+    Column("asset_id", Uuid, ForeignKey("media_asset.id", ondelete="CASCADE"), primary_key=True),
+    Column("tag_id", Uuid, ForeignKey("tag.id", ondelete="CASCADE"), primary_key=True, index=True),
+)
+
+
+class Tag(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """A free-form keyword. Names are unique case-insensitively (``name_key``)."""
+
+    __tablename__ = "tag"
+
+    name: Mapped[str] = mapped_column(String(100))
+    name_key: Mapped[str] = mapped_column(String(100), unique=True)
+
+
+class Album(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """A manual collection. Deleting an album never touches its media."""
+
+    __tablename__ = "album"
+
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text)
+    cover_asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("media_asset.id", ondelete="SET NULL")
+    )
+    created_by: Mapped[str | None] = mapped_column(String(200))
+
+    items: Mapped[list["AlbumAsset"]] = relationship(
+        back_populates="album", cascade="all, delete-orphan", order_by="AlbumAsset.position"
+    )
+
+
+class AlbumAsset(Base):
+    __tablename__ = "album_asset"
+
+    album_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("album.id", ondelete="CASCADE"), primary_key=True
+    )
+    asset_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("media_asset.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    added_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    album: Mapped[Album] = relationship(back_populates="items")

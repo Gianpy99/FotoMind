@@ -90,9 +90,32 @@ export interface paths {
         };
         /**
          * List Assets
-         * @description Newest first (capture time, falling back to file mtime). Keyset pagination.
+         * @description Capture time (falling back to file mtime) order with keyset pagination.
+         *
+         *     ``q`` terms are ANDed; each matches name, camera, lens, file path or tag. ``tag`` may be
+         *     repeated (all must match). ``date_from``/``date_to`` are inclusive UTC days.
          */
         get: operations["list_assets_api_v1_assets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Library Facets
+         * @description Cameras, tags and years present in the library, with asset counts.
+         */
+        get: operations["library_facets_api_v1_library_facets_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -115,6 +138,30 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /**
+         * Update Asset
+         * @description Rate or tag one asset. Catalogue-only: original files are never modified.
+         */
+        patch: operations["update_asset_api_v1_assets__asset_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/assets/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk Update Assets
+         * @description Apply a rating and/or add/remove tags across a selection.
+         */
+        post: operations["bulk_update_assets_api_v1_assets_bulk_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
         patch?: never;
         trace?: never;
     };
@@ -129,6 +176,80 @@ export interface paths {
         get: operations["get_thumbnail_api_v1_assets__asset_id__thumbnail_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/albums": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Albums */
+        get: operations["list_albums_api_v1_albums_get"];
+        put?: never;
+        /** Create Album */
+        post: operations["create_album_api_v1_albums_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/albums/{album_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Album */
+        get: operations["get_album_api_v1_albums__album_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Album */
+        delete: operations["delete_album_api_v1_albums__album_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Album */
+        patch: operations["update_album_api_v1_albums__album_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/albums/{album_id}/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Album Assets
+         * @description Append assets (already present ones and unknown ids are ignored).
+         */
+        post: operations["add_album_assets_api_v1_albums__album_id__assets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/albums/{album_id}/assets/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Remove Album Assets */
+        post: operations["remove_album_assets_api_v1_albums__album_id__assets_remove_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -153,6 +274,23 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/storage-roots/{root_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Root */
+        patch: operations["update_root_api_v1_storage_roots__root_id__patch"];
         trace?: never;
     };
     "/api/v1/storage-roots/{root_id}/scan": {
@@ -245,6 +383,23 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/worker/storage-roots/{root_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Relocate Root */
+        patch: operations["relocate_root_api_v1_worker_storage_roots__root_id__patch"];
         trace?: never;
     };
     "/api/v1/worker/storage-roots/{root_id}/files": {
@@ -356,6 +511,75 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AlbumAssets */
+        AlbumAssets: {
+            /** Asset Ids */
+            asset_ids: string[];
+        };
+        /** AlbumCreate */
+        AlbumCreate: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Asset Ids
+             * @default []
+             */
+            asset_ids: string[];
+        };
+        /** AlbumOut */
+        AlbumOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Cover Asset Id */
+            cover_asset_id: string | null;
+            /** Cover Thumbnail Url */
+            cover_thumbnail_url: string | null;
+            /** Asset Count */
+            asset_count: number;
+            /** Created By */
+            created_by: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** AlbumRef */
+        AlbumRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * AlbumUpdate
+         * @description Fields left out are unchanged; ``cover_asset_id: null`` restores the automatic cover.
+         */
+        AlbumUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Cover Asset Id */
+            cover_asset_id?: string | null;
+        };
         /** AssetDetail */
         AssetDetail: {
             /**
@@ -382,6 +606,11 @@ export interface components {
             /** Rating */
             rating: number;
             availability: components["schemas"]["Availability"];
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
             /** Thumbnail Url */
             thumbnail_url?: string | null;
             /** Camera Make */
@@ -396,6 +625,11 @@ export interface components {
             };
             /** Files */
             files: components["schemas"]["MediaFileOut"][];
+            /**
+             * Albums
+             * @default []
+             */
+            albums: components["schemas"]["AlbumRef"][];
         };
         /** AssetPage */
         AssetPage: {
@@ -432,6 +666,11 @@ export interface components {
             /** Rating */
             rating: number;
             availability: components["schemas"]["Availability"];
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
             /** Thumbnail Url */
             thumbnail_url?: string | null;
         };
@@ -440,6 +679,16 @@ export interface components {
          * @enum {string}
          */
         AssetType: "photo" | "video";
+        /**
+         * AssetUpdate
+         * @description Fields left out are unchanged. ``tags`` replaces the asset's tags.
+         */
+        AssetUpdate: {
+            /** Rating */
+            rating?: number | null;
+            /** Tags */
+            tags?: string[] | null;
+        };
         /**
          * Availability
          * @description LIB-009 / STO-002: unavailable (offline root) is distinct from missing/deleted.
@@ -452,6 +701,28 @@ export interface components {
          * @enum {string}
          */
         BackupState: "unknown" | "pending" | "verified" | "failed" | "stale";
+        /** BulkAssetUpdate */
+        BulkAssetUpdate: {
+            /** Asset Ids */
+            asset_ids: string[];
+            /** Rating */
+            rating?: number | null;
+            /**
+             * Add Tags
+             * @default []
+             */
+            add_tags: string[];
+            /**
+             * Remove Tags
+             * @default []
+             */
+            remove_tags: string[];
+        };
+        /** BulkResult */
+        BulkResult: {
+            /** Updated */
+            updated: number;
+        };
         /** ClaimRequest */
         ClaimRequest: {
             /** Host */
@@ -499,6 +770,13 @@ export interface components {
             server_version?: string | null;
             /** Detail */
             detail?: string | null;
+        };
+        /** FacetValue */
+        FacetValue: {
+            /** Value */
+            value: string;
+            /** Count */
+            count: number;
         };
         /**
          * FileReport
@@ -644,6 +922,20 @@ export interface components {
             /** Needs Thumbnail */
             needs_thumbnail: boolean;
         };
+        /**
+         * LibraryFacets
+         * @description Values present in the library, for the filter bar.
+         */
+        LibraryFacets: {
+            /** Cameras */
+            cameras: components["schemas"]["FacetValue"][];
+            /** Tags */
+            tags: components["schemas"]["FacetValue"][];
+            /** Years */
+            years: components["schemas"]["FacetValue"][];
+            /** Total */
+            total: number;
+        };
         /** MediaFileOut */
         MediaFileOut: {
             /**
@@ -712,6 +1004,16 @@ export interface components {
             /** Volume Id */
             volume_id?: string | null;
         };
+        /**
+         * RelocateRoot
+         * @description The folder moved (new drive letter, renamed parent): keep its catalogue, change the path.
+         */
+        RelocateRoot: {
+            /** Path */
+            path: string;
+            /** Volume Id */
+            volume_id?: string | null;
+        };
         /** StorageRootOut */
         StorageRootOut: {
             /**
@@ -728,6 +1030,11 @@ export interface components {
             /** Volume Id */
             volume_id: string | null;
             availability: components["schemas"]["Availability"];
+            /**
+             * Exclude Patterns
+             * @default []
+             */
+            exclude_patterns: string[];
             /** Last Scan At */
             last_scan_at: string | null;
             /**
@@ -745,6 +1052,16 @@ export interface components {
              * @default 0
              */
             missing_count: number;
+        };
+        /**
+         * StorageRootUpdate
+         * @description Fields left out are unchanged. Exclusions apply from the next scan (LIB-003).
+         */
+        StorageRootUpdate: {
+            /** Label */
+            label?: string | null;
+            /** Exclude Patterns */
+            exclude_patterns?: string[] | null;
         };
         /** SystemStatusResponse */
         SystemStatusResponse: {
@@ -874,6 +1191,14 @@ export interface operations {
                 asset_type?: components["schemas"]["AssetType"] | null;
                 availability?: components["schemas"]["Availability"] | null;
                 storage_root_id?: string | null;
+                q?: string | null;
+                min_rating?: number | null;
+                tag?: string[] | null;
+                album_id?: string | null;
+                camera?: string | null;
+                date_from?: string | null;
+                date_to?: string | null;
+                sort?: "newest" | "oldest";
             };
             header?: never;
             path?: never;
@@ -901,6 +1226,26 @@ export interface operations {
             };
         };
     };
+    library_facets_api_v1_library_facets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryFacets"];
+                };
+            };
+        };
+    };
     get_asset_api_v1_assets__asset_id__get: {
         parameters: {
             query?: never;
@@ -919,6 +1264,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssetDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_asset_api_v1_assets__asset_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bulk_update_assets_api_v1_assets_bulk_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkAssetUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkResult"];
                 };
             };
             /** @description Validation Error */
@@ -970,6 +1383,224 @@ export interface operations {
             };
         };
     };
+    list_albums_api_v1_albums_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlbumOut"][];
+                };
+            };
+        };
+    };
+    create_album_api_v1_albums_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlbumCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlbumOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_album_api_v1_albums__album_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                album_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlbumOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_album_api_v1_albums__album_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                album_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_album_api_v1_albums__album_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                album_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlbumUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlbumOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_album_assets_api_v1_albums__album_id__assets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                album_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlbumAssets"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlbumOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_album_assets_api_v1_albums__album_id__assets_remove_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                album_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlbumAssets"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlbumOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_roots_api_v1_storage_roots_get: {
         parameters: {
             query?: never;
@@ -986,6 +1617,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StorageRootOut"][];
+                };
+            };
+        };
+    };
+    update_root_api_v1_storage_roots__root_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                root_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StorageRootUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageRootOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -1156,6 +1822,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RegisterRoot"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageRootOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    relocate_root_api_v1_worker_storage_roots__root_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                root_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RelocateRoot"];
             };
         };
         responses: {

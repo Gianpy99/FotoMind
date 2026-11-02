@@ -71,6 +71,28 @@ def roots_list() -> int:
     return 0
 
 
+def roots_move(selector: str, new_path: str) -> int:
+    """The folder moved (drive letter, renamed parent): point the root at its new location.
+
+    The catalogue (ratings, tags, albums) is kept; the next scan re-checks the files.
+    """
+    settings = get_worker_settings()
+    folder = Path(new_path).expanduser().resolve()
+    if not folder.is_dir():
+        print(f"Not a folder: {folder}", file=sys.stderr)
+        return 2
+    with api_client(settings) as client:
+        api = WorkerApi(client)
+        root = _match_root(api.list_roots(settings.worker_host), selector)
+        if root is None:
+            print(f"Unknown storage root: {selector}", file=sys.stderr)
+            return 2
+        moved = api.relocate_root(root["id"], str(folder), volume_id_for(folder))
+    print(f"Moved {moved['label']}: {root['path']} -> {moved['path']}")
+    print(f"Run 'fotomind-worker scan \"{moved['label']}\"' to re-check its files.")
+    return 0
+
+
 def _match_root(roots: list[dict], selector: str) -> dict | None:
     for r in roots:
         if selector in (r["id"], r["label"], r["path"]):
@@ -150,6 +172,9 @@ def main(argv: list[str] | None = None) -> int:
     add.add_argument("path")
     add.add_argument("--label")
     roots_sub.add_parser("list", help="list the storage roots of this PC")
+    move = roots_sub.add_parser("move", help="point a root at the folder's new location")
+    move.add_argument("root", help="root id, label or old path")
+    move.add_argument("path", help="new folder location")
 
     scan_p = sub.add_parser("scan", help="scan a storage root now (default: all of this PC)")
     scan_p.add_argument("root", nargs="?", help="root id, label or path")
@@ -164,6 +189,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "roots":
             if args.roots_command == "add":
                 return roots_add(args.path, args.label)
+            if args.roots_command == "move":
+                return roots_move(args.root, args.path)
             return roots_list()
         if args.command == "scan":
             return scan(args.root)

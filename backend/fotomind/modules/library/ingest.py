@@ -5,7 +5,8 @@ Identity rules (ADR-0002):
 - an asset is identified by content: a new path whose SHA-256 matches an existing original is
   attached to that asset (duplicate or moved file) instead of creating a new asset;
 - files not seen by a completed scan become ``missing``; an unreachable root makes its files
-  ``offline`` (never deleted).
+  ``offline`` (never deleted);
+- unseen files matching the root's exclusion patterns leave the catalogue (LIB-003).
 """
 
 import uuid
@@ -13,12 +14,12 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from pydantic import BaseModel, Field, StringConstraints, field_validator
-from sqlalchemy import exists, select, update
+from sqlalchemy import delete, exists, select, update
 from sqlalchemy.orm import Session
 
 from fotomind.domain.enums import AssetType, Availability, MediaFileRole
 from fotomind.infrastructure.db.models import MediaAsset, MediaFile, StorageRoot
-from fotomind.modules.storage.paths import normalise_relative_path
+from fotomind.modules.storage.paths import is_excluded, normalise_relative_path
 
 Sha256 = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 ShortText = Annotated[str, StringConstraints(max_length=200)]
@@ -223,10 +224,48 @@ def recompute_asset_availability(session: Session, root_id: uuid.UUID) -> None:
         )
 
 
+class ScanOutcome(BaseModel):
+    missing: int
+    excluded: int
+    # Assets whose only files were excluded; they left the catalogue (remove their thumbnails).
+    removed_asset_ids: list[uuid.UUID]
+
+
+def _drop_excluded(session: Session, root: StorageRoot, scan_started_at: datetime) -> ScanOutcome:
+    """Unseen files matching the root's exclusions leave the catalogue instead of going missing."""
+    patterns = list(root.exclude_patterns or [])
+    if not patterns:
+        return ScanOutcome(missing=0, excluded=0, removed_asset_ids=[])
+    unseen = session.execute(
+        select(MediaFile.id, MediaFile.asset_id, MediaFile.relative_path).where(
+            MediaFile.storage_root_id == root.id, MediaFile.last_seen_at < scan_started_at
+        )
+    ).all()
+    excluded = [(fid, aid) for fid, aid, path in unseen if is_excluded(path, patterns)]
+    if not excluded:
+        return ScanOutcome(missing=0, excluded=0, removed_asset_ids=[])
+    for chunk in range(0, len(excluded), 500):
+        ids = [fid for fid, _ in excluded[chunk : chunk + 500]]
+        session.execute(
+            delete(MediaFile)
+            .where(MediaFile.id.in_(ids))
+            .execution_options(synchronize_session=False)
+        )
+    removed: list[uuid.UUID] = []
+    for asset_id in {aid for _, aid in excluded}:
+        has_files = session.scalar(select(exists().where(MediaFile.asset_id == asset_id)))
+        if not has_files:
+            session.execute(delete(MediaAsset).where(MediaAsset.id == asset_id))
+            removed.append(asset_id)
+    session.expire_all()
+    return ScanOutcome(missing=0, excluded=len(excluded), removed_asset_ids=removed)
+
+
 def finish_scan(
     session: Session, root: StorageRoot, scan_started_at: datetime, now: datetime
-) -> int:
-    """Mark files not seen since the scan started as missing. Returns how many went missing."""
+) -> ScanOutcome:
+    """Settle a complete scan: excluded unseen files are dropped, other unseen files go missing."""
+    outcome = _drop_excluded(session, root, scan_started_at)
     missing = session.execute(
         update(MediaFile)
         .where(
@@ -240,7 +279,8 @@ def finish_scan(
     root.availability = Availability.ONLINE
     root.last_scan_at = now
     recompute_asset_availability(session, root.id)
-    return missing
+    outcome.missing = missing
+    return outcome
 
 
 def mark_root_offline(session: Session, root: StorageRoot) -> None:
