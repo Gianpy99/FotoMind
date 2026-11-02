@@ -76,6 +76,52 @@ export function monthLabel(value: string): string {
   return date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
 }
 
+export type GroupBy = "month" | "week" | "day";
+
+const DAY_MS = 86_400_000;
+
+/** ISO 8601 week (Monday first; week 1 holds the year's first Thursday), in local time. */
+export function isoWeek(date: Date): { year: number; week: number; monday: Date } {
+  const monday = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const thursday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 3);
+  const year = thursday.getFullYear();
+  // Round: daylight-saving changes make some days 23 or 25 hours long.
+  const dayOfYear = Math.round((thursday.getTime() - new Date(year, 0, 1).getTime()) / DAY_MS);
+  return { year, week: Math.floor(dayOfYear / 7) + 1, monday };
+}
+
+/** Grid section key for a timestamp; sorted items with the same key form one section. */
+export function groupKey(value: string, by: GroupBy): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "unknown";
+  if (by === "month") return monthKey(value);
+  if (by === "week") {
+    const { year, week } = isoWeek(date);
+    return `${year}-W${String(week).padStart(2, "0")}`;
+  }
+  return `${monthKey(value)}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+export function groupLabel(value: string, by: GroupBy): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown date";
+  if (by === "month") return monthLabel(value);
+  if (by === "day") {
+    return date.toLocaleDateString(undefined, {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  }
+  const { week, monday } = isoWeek(date);
+  const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
+  const short: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
+  const end = sunday.toLocaleDateString(undefined, { ...short, year: "numeric" });
+  return `CW ${week} · ${monday.toLocaleDateString(undefined, short)} – ${end}`;
+}
+
 export function plural(count: number, word: string): string {
   return `${count} ${word}${count === 1 ? "" : "s"}`;
 }

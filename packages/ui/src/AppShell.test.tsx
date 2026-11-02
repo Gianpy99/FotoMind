@@ -199,7 +199,10 @@ function makeClient(overrides: Partial<FotoMindClient> = {}): FotoMindClient {
   };
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.removeItem("fotomind.groupBy");
+});
 
 describe("AppShell", () => {
   it("shows the portal user and the library grid", async () => {
@@ -347,6 +350,41 @@ describe("AppShell", () => {
     expect(createAlbum).toHaveBeenCalledWith({ name: "Summer", asset_ids: ["a1", "a2"] });
     expect(await screen.findByText(/Created album “Summer”/)).toBeTruthy();
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("groups by day or week and selects a whole section, loading the rest of it", async () => {
+    const listAssets = vi.fn<FotoMindClient["listAssets"]>(async (params) =>
+      params?.cursor
+        ? {
+            items: [asset(3), asset(4, { sort_at: "2024-06-01T10:00:00Z" })],
+            total: 4,
+            next_cursor: null,
+          }
+        : { items: [asset(1), asset(2)], total: 4, next_cursor: "c2" },
+    );
+    render(<AppShell client={makeClient({ listAssets })} surface="web" />);
+    await screen.findByTitle("IMG_1.jpg");
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Group by" }), {
+      target: { value: "week" },
+    });
+    expect(screen.getByRole("button", { name: /^CW 28 · / })).toBeTruthy();
+    expect(localStorage.getItem("fotomind.groupBy")).toBe("week");
+    fireEvent.change(screen.getByRole("combobox", { name: "Group by" }), {
+      target: { value: "day" },
+    });
+
+    // The only loaded day may continue on the next page: selecting it pages in the rest.
+    const [daySelect] = screen.getAllByRole("checkbox", { name: /^Select all in / });
+    fireEvent.click(daySelect!);
+    const bar = await screen.findByRole("toolbar", { name: "Selection" });
+    expect(await within(bar).findByText("3 selected")).toBeTruthy();
+    expect(listAssets).toHaveBeenLastCalledWith(expect.objectContaining({ cursor: "c2" }));
+    expect(screen.getAllByRole("checkbox", { name: /^Select all in / })).toHaveLength(2);
+
+    // Ticked again: deselects only that day.
+    fireEvent.click(screen.getAllByRole("checkbox", { name: /^Select all in / })[0]!);
+    expect(screen.queryByRole("toolbar", { name: "Selection" })).toBeNull();
   });
 
   it("edits info on a selection: shifts the date and sets a place", async () => {

@@ -39,10 +39,11 @@ import {
   errorMessage,
   fileFormat,
   formatDuration,
+  groupKey,
+  groupLabel,
   isRawFormat,
-  monthKey,
-  monthLabel,
   yearRange,
+  type GroupBy,
 } from "./format";
 
 const PAGE_SIZE = 100;
@@ -105,13 +106,25 @@ interface Group {
   items: { asset: AssetSummary; index: number }[];
 }
 
-function groupByMonth(items: AssetSummary[]): Group[] {
+const GROUP_BY_KEY = "fotomind.groupBy";
+const GROUP_BY_LABELS: Record<GroupBy, string> = { month: "Month", week: "Week", day: "Day" };
+
+function storedGroupBy(): GroupBy {
+  try {
+    const value = localStorage.getItem(GROUP_BY_KEY);
+    return value === "week" || value === "day" ? value : "month";
+  } catch {
+    return "month";
+  }
+}
+
+function groupItems(items: AssetSummary[], by: GroupBy): Group[] {
   const groups: Group[] = [];
   items.forEach((asset, index) => {
-    const key = monthKey(asset.sort_at);
+    const key = groupKey(asset.sort_at, by);
     let group = groups[groups.length - 1];
     if (!group || group.key !== key) {
-      group = { key, label: monthLabel(asset.sort_at), items: [] };
+      group = { key, label: groupLabel(asset.sort_at, by), items: [] };
       groups.push(group);
     }
     group.items.push({ asset, index });
@@ -140,6 +153,7 @@ export function LibraryView({
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [tileSize, setTileSize] = useState(storedTileSize);
+  const [groupBy, setGroupBy] = useState(storedGroupBy);
   const [bulkTag, setBulkTag] = useState("");
   const [bulkAlbum, setBulkAlbum] = useState("");
   const [busy, setBusy] = useState(false);
@@ -239,6 +253,15 @@ export function LibraryView({
     }
   }
 
+  function changeGroupBy(by: GroupBy) {
+    setGroupBy(by);
+    try {
+      localStorage.setItem(GROUP_BY_KEY, by);
+    } catch {
+      // Not persisted; fine.
+    }
+  }
+
   function loadMore() {
     if (!state.cursor) return;
     setState((s) => ({ ...s, loading: true }));
@@ -279,6 +302,50 @@ export function LibraryView({
       else next.add(key);
       return next;
     });
+  }
+
+  /** Pages in the rest of a section that continues past the loaded items; returns its new ids. */
+  async function loadRestOfGroup(key: string): Promise<string[]> {
+    const ids: string[] = [];
+    let cursor = state.cursor;
+    while (cursor) {
+      const page = await fetchPage(cursor);
+      cursor = page.next_cursor;
+      setState((s) => ({
+        items: [...s.items, ...page.items],
+        total: page.total,
+        cursor: page.next_cursor,
+        loading: false,
+        error: null,
+      }));
+      const inGroup = page.items.filter((a) => groupKey(a.sort_at, groupBy) === key);
+      ids.push(...inGroup.map((a) => a.id));
+      if (inGroup.length < page.items.length) break;
+    }
+    return ids;
+  }
+
+  async function toggleGroupSelection(group: Group, more: boolean) {
+    const ids = group.items.map(({ asset }) => asset.id);
+    if (!more && ids.every((id) => selected.has(id))) {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        ids.forEach((id) => next.delete(id));
+        return next;
+      });
+      return;
+    }
+    if (more) {
+      setBusy(true);
+      try {
+        ids.push(...(await loadRestOfGroup(group.key)));
+      } catch (err) {
+        setNotice(`Could not load all of ${group.label}: ${errorMessage(err)}`);
+      } finally {
+        setBusy(false);
+      }
+    }
+    setSelected((prev) => new Set([...prev, ...ids]));
   }
 
   async function bulk(action: () => Promise<string>) {
@@ -372,7 +439,7 @@ export function LibraryView({
     onCatalogChanged?.();
   }
 
-  const groups = useMemo(() => groupByMonth(items), [items]);
+  const groups = useMemo(() => groupItems(items, groupBy), [items, groupBy]);
   const activeFilters = (filters.tag ? 1 : 0) + (filters.camera ? 1 : 0) + (filters.year ? 1 : 0);
   const filtered = query.trim() !== "" || filters.minRating > 0 || activeFilters > 0;
   const tagNames = facets?.tags.map((t) => t.value) ?? [];
@@ -400,6 +467,18 @@ export function LibraryView({
             >
               <option value="newest">Date taken (newest)</option>
               <option value="oldest">Date taken (oldest)</option>
+            </select>
+            <select
+              aria-label="Group by"
+              title="Group the grid by month, calendar week or day"
+              value={groupBy}
+              onChange={(e) => changeGroupBy(e.target.value as GroupBy)}
+            >
+              {(Object.keys(GROUP_BY_LABELS) as GroupBy[]).map((by) => (
+                <option key={by} value={by}>
+                  By {GROUP_BY_LABELS[by].toLowerCase()}
+                </option>
+              ))}
             </select>
             <button
               type="button"
@@ -623,11 +702,36 @@ export function LibraryView({
           </div>
         )}
 
-        {groups.map((group) => {
+        {groups.map((group, groupIndex) => {
           const isCollapsed = collapsed.has(group.key);
+          // The last loaded section may continue on the next page.
+          const more = groupIndex === groups.length - 1 && state.cursor != null;
+          const selectedHere = group.items.filter(({ asset }) => selected.has(asset.id)).length;
+          const allSelected = selectedHere === group.items.length && !more;
+          const count = `${group.items.length}${more ? "+" : ""}`;
           return (
             <div key={group.key} className="fm-group">
-              <h3 className="fm-group-head">
+              <h3
+                className={
+                  selectedHere > 0 ? "fm-group-head fm-group-head-selected" : "fm-group-head"
+                }
+              >
+                <input
+                  type="checkbox"
+                  className="fm-group-select"
+                  aria-label={`Select all in ${group.label}`}
+                  title={
+                    allSelected
+                      ? `Deselect ${group.label}`
+                      : `Select all ${count} items in ${group.label}`
+                  }
+                  checked={allSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = selectedHere > 0 && !allSelected;
+                  }}
+                  disabled={busy}
+                  onChange={() => void toggleGroupSelection(group, more && !allSelected)}
+                />
                 <button
                   type="button"
                   aria-expanded={!isCollapsed}
@@ -641,7 +745,7 @@ export function LibraryView({
                   {group.label}
                 </button>
                 <span className="fm-muted fm-num" aria-hidden="true">
-                  {group.items.length}
+                  {selectedHere > 0 ? `${selectedHere} of ${count}` : count}
                 </span>
               </h3>
               {!isCollapsed && (

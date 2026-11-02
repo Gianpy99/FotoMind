@@ -973,6 +973,33 @@ svg.lucide.fm-star-on {
   font-weight: 400;
 }
 
+/* Section "select all": shown on hover/focus, while selecting, or when part of it is chosen. */
+.fm-group-select {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.fm-group-head:hover .fm-group-select,
+.fm-group-select:focus-visible,
+.fm-group-head-selected .fm-group-select,
+.fm-workarea:has(.fm-selecting) .fm-group-select {
+  opacity: 1;
+}
+
+.fm-group-head-selected > span {
+  color: var(--color-accent);
+}
+
+@media (hover: none) {
+  .fm-group-select {
+    opacity: 1;
+  }
+}
+
 .fm-grid {
   list-style: none;
   margin: 0;
