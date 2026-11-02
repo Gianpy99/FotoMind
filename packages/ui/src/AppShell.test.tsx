@@ -116,6 +116,10 @@ function makeClient(overrides: Partial<FotoMindClient> = {}): FotoMindClient {
       cameras: [{ value: "EOS R6", count: 2 }],
       tags: [{ value: "family", count: 1 }],
       years: [{ value: "2024", count: 2 }],
+      types: [
+        { value: "photo", count: 1 },
+        { value: "video", count: 1 },
+      ],
       total: 2,
     }),
     updateAsset: async (id, body) => ({
@@ -153,17 +157,29 @@ describe("AppShell", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("HTTP 401");
   });
 
-  it("opens the viewer with file details and navigates with the keyboard", async () => {
+  it("inspects on click, opens the viewer on a second click and navigates", async () => {
     render(<AppShell client={makeClient()} surface="web" />);
     fireEvent.click(await screen.findByTitle("IMG_1.jpg"));
     expect(await screen.findByText("Canon EOS R6")).toBeTruthy();
     expect(screen.getByText("DesktopImages/2024/IMG_1.jpg")).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
 
+    // Arrow keys move the inspected item in the grid.
     fireEvent.keyDown(window, { key: "ArrowRight" });
     expect(await screen.findByText("DesktopImages/2024/IMG_2.jpg")).toBeTruthy();
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    expect(await screen.findByText("DesktopImages/2024/IMG_1.jpg")).toBeTruthy();
+
+    fireEvent.click(screen.getByAltText("IMG_1.jpg"));
+    const dialog = await screen.findByRole("dialog", { name: "IMG_1.jpg" });
+    expect(await within(dialog).findByText("Canon EOS R6")).toBeTruthy();
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(await screen.findByRole("dialog", { name: "IMG_2.jpg" })).toBeTruthy();
 
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
+    // The last viewed item stays inspected.
+    expect(await screen.findByText("DesktopImages/2024/IMG_2.jpg")).toBeTruthy();
   });
 
   it("shows an empty-library hint", async () => {
@@ -202,6 +218,7 @@ describe("AppShell", () => {
       expect(listAssets).toHaveBeenLastCalledWith(expect.objectContaining({ q: "rome" })),
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Filter" }));
     fireEvent.change(await screen.findByRole("combobox", { name: "Year" }), {
       target: { value: "2024" },
     });
@@ -277,13 +294,43 @@ describe("AppShell", () => {
     const listAssets = vi.fn(makeClient().listAssets);
     render(<AppShell client={makeClient({ listAssets })} surface="web" />);
     fireEvent.click(await screen.findByRole("button", { name: "Albums" }));
-    fireEvent.click(await screen.findByRole("button", { name: /Rome/ }));
+    const main = screen.getByRole("main");
+    fireEvent.click(await within(main).findByRole("button", { name: /Rome/ }));
     expect(await screen.findByRole("heading", { name: "Rome" })).toBeTruthy();
     await waitFor(() =>
       expect(listAssets).toHaveBeenLastCalledWith(expect.objectContaining({ album_id: "al1" })),
     );
-    fireEvent.click(screen.getByRole("button", { name: "← Albums" }));
-    expect(await screen.findByRole("button", { name: /Rome/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "All albums" }));
+    expect(await within(main).findByRole("button", { name: /Rome/ })).toBeTruthy();
+
+    // Collections in the sidebar open an album directly.
+    const nav = screen.getByRole("navigation", { name: "Sections" });
+    fireEvent.click(within(nav).getByRole("button", { name: "Rome" }));
+    expect(await screen.findByRole("heading", { name: "Rome" })).toBeTruthy();
+  });
+
+  it("filters by media type from the sidebar and shows counts in the status bar", async () => {
+    const listAssets = vi.fn(makeClient().listAssets);
+    render(<AppShell client={makeClient({ listAssets })} surface="web" />);
+    expect(await screen.findByText("2 items (1 photo, 1 video)")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Videos" }));
+    expect(await screen.findByRole("heading", { name: "Videos" })).toBeTruthy();
+    await waitFor(() =>
+      expect(listAssets).toHaveBeenLastCalledWith(expect.objectContaining({ asset_type: "video" })),
+    );
+  });
+
+  it("toggles the theme and focuses search with Ctrl+K", async () => {
+    render(<AppShell client={makeClient()} surface="web" />);
+    await screen.findByAltText("IMG_1.jpg");
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    fireEvent.click(screen.getByRole("button", { name: "Switch to light theme" }));
+    expect(document.documentElement.dataset.theme).toBe("light");
+    fireEvent.click(screen.getByRole("button", { name: "Switch to dark theme" }));
+    expect(document.documentElement.dataset.theme).toBe("dark");
+
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    expect(document.activeElement).toBe(screen.getByRole("searchbox", { name: "Search" }));
   });
 
   it("edits a root's exclusion rules", async () => {

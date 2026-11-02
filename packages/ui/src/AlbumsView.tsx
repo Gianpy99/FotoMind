@@ -1,67 +1,74 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { ArrowLeft, FolderPlus, Images, Pencil, Trash2 } from "lucide-react";
 import type { Album, FotoMindClient } from "@fotomind/api-client";
-import { LibraryView } from "./LibraryView";
-import { errorMessage } from "./format";
+import { LibraryView, type LibraryViewProps } from "./LibraryView";
+import { errorMessage, plural } from "./format";
 
-export function AlbumsView({ client }: { client: FotoMindClient }) {
-  const [albums, setAlbums] = useState<Album[] | null>(null);
+export interface AlbumsViewProps {
+  client: FotoMindClient;
+  /** null while loading. */
+  albums: Album[] | null;
+  /** The open album, or null for the album grid. */
+  albumId: string | null;
+  onOpen(albumId: string | null): void;
+  /** Albums were created, renamed, deleted or their contents changed. */
+  onChanged(): void;
+  /** Passed through to the album's library grid. */
+  library?: Pick<LibraryViewProps, "query" | "facets" | "onClearSearch">;
+}
+
+export function AlbumsView({
+  client,
+  albums,
+  albumId,
+  onOpen,
+  onChanged,
+  library,
+}: AlbumsViewProps) {
   const [error, setError] = useState<string | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
 
-  const refresh = useCallback(
-    () =>
-      client.listAlbums().then(
-        (a) => {
-          setAlbums(a);
-          setError(null);
-        },
-        (err: unknown) => setError(errorMessage(err)),
-      ),
-    [client],
-  );
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  async function act(action: () => Promise<unknown>) {
-    try {
-      await action();
-    } catch (err) {
-      setError(errorMessage(err));
-    }
-    await refresh();
-  }
-
-  const open = albums?.find((a) => a.id === openId);
-  if (openId && open) {
+  const open = albumId ? albums?.find((a) => a.id === albumId) : undefined;
+  if (open) {
     return (
       <AlbumDetail
+        key={open.id}
         client={client}
         album={open}
-        onBack={() => setOpenId(null)}
-        onChanged={() => void refresh()}
+        albums={albums ?? []}
+        library={library}
+        onBack={() => onOpen(null)}
+        onChanged={onChanged}
         onDeleted={() => {
-          setOpenId(null);
-          void refresh();
+          onOpen(null);
+          onChanged();
         }}
       />
     );
   }
 
+  function create(name: string) {
+    client.createAlbum({ name }).then(
+      () => {
+        setError(null);
+        onChanged();
+      },
+      (err: unknown) => setError(errorMessage(err)),
+    );
+  }
+
   return (
-    <section className="fm-albums" aria-labelledby="fm-albums-title">
-      <div className="fm-toolbar">
+    <section className="fm-page fm-albums" aria-labelledby="fm-albums-title">
+      <div className="fm-page-head">
         <h2 id="fm-albums-title">Albums</h2>
         <form
-          className="fm-inline-form fm-toolbar-end"
+          className="fm-inline-form fm-page-head-end"
           onSubmit={(e) => {
             e.preventDefault();
             const name = newName.trim();
             if (!name) return;
             setNewName("");
-            void act(() => client.createAlbum({ name }));
+            create(name);
           }}
         >
           <input
@@ -71,7 +78,8 @@ export function AlbumsView({ client }: { client: FotoMindClient }) {
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
           />
-          <button type="submit" disabled={!newName.trim()}>
+          <button type="submit" className="fm-btn fm-btn-primary" disabled={!newName.trim()}>
+            <FolderPlus aria-hidden="true" />
             Create album
           </button>
         </form>
@@ -82,21 +90,23 @@ export function AlbumsView({ client }: { client: FotoMindClient }) {
         </p>
       )}
       {albums && albums.length === 0 && (
-        <p className="fm-empty">
+        <div className="fm-empty">
           No albums yet. Create one here, or select photos in the Library and use “Add to album”.
-        </p>
+        </div>
       )}
       <ul className="fm-album-grid">
         {albums?.map((album) => (
           <li key={album.id}>
-            <button type="button" className="fm-album-card" onClick={() => setOpenId(album.id)}>
+            <button type="button" className="fm-album-card" onClick={() => onOpen(album.id)}>
               {album.cover_thumbnail_url ? (
                 <img src={client.url(album.cover_thumbnail_url)} alt="" loading="lazy" />
               ) : (
-                <span className="fm-tile-placeholder">Empty</span>
+                <span className="fm-tile-placeholder">
+                  <Images aria-hidden="true" />
+                </span>
               )}
               <span className="fm-album-name">{album.name}</span>
-              <span className="fm-muted fm-small">{album.asset_count} items</span>
+              <span className="fm-muted fm-small fm-num">{plural(album.asset_count, "item")}</span>
             </button>
           </li>
         ))}
@@ -108,12 +118,22 @@ export function AlbumsView({ client }: { client: FotoMindClient }) {
 interface AlbumDetailProps {
   client: FotoMindClient;
   album: Album;
+  albums: Album[];
+  library?: AlbumsViewProps["library"];
   onBack(): void;
   onChanged(): void;
   onDeleted(): void;
 }
 
-function AlbumDetail({ client, album, onBack, onChanged, onDeleted }: AlbumDetailProps) {
+function AlbumDetail({
+  client,
+  album,
+  albums,
+  library,
+  onBack,
+  onChanged,
+  onDeleted,
+}: AlbumDetailProps) {
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(album.name);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -140,8 +160,14 @@ function AlbumDetail({ client, album, onBack, onChanged, onDeleted }: AlbumDetai
 
   const heading = (
     <div className="fm-album-head">
-      <button type="button" onClick={onBack}>
-        ← Albums
+      <button
+        type="button"
+        className="fm-icon-btn"
+        onClick={onBack}
+        aria-label="All albums"
+        title="All albums"
+      >
+        <ArrowLeft aria-hidden="true" />
       </button>
       {renaming ? (
         <form
@@ -158,8 +184,10 @@ function AlbumDetail({ client, album, onBack, onChanged, onDeleted }: AlbumDetai
             onChange={(e) => setName(e.target.value)}
             autoFocus
           />
-          <button type="submit">Save</button>
-          <button type="button" onClick={() => setRenaming(false)}>
+          <button type="submit" className="fm-btn fm-btn-primary">
+            Save
+          </button>
+          <button type="button" className="fm-btn fm-btn-ghost" onClick={() => setRenaming(false)}>
             Cancel
           </button>
         </form>
@@ -168,28 +196,41 @@ function AlbumDetail({ client, album, onBack, onChanged, onDeleted }: AlbumDetai
           <h2>{album.name}</h2>
           <button
             type="button"
+            className="fm-icon-btn"
+            aria-label="Rename"
+            title="Rename"
             onClick={() => {
               setName(album.name);
               setRenaming(true);
             }}
           >
-            Rename
+            <Pencil aria-hidden="true" />
           </button>
         </>
       )}
       {confirmDelete ? (
         <span className="fm-inline-form">
           <span className="fm-small">Delete the album? Photos are kept.</span>
-          <button type="button" className="fm-danger" onClick={remove}>
+          <button type="button" className="fm-btn fm-btn-danger" onClick={remove}>
             Delete album
           </button>
-          <button type="button" onClick={() => setConfirmDelete(false)}>
+          <button
+            type="button"
+            className="fm-btn fm-btn-ghost"
+            onClick={() => setConfirmDelete(false)}
+          >
             Keep
           </button>
         </span>
       ) : (
-        <button type="button" onClick={() => setConfirmDelete(true)}>
-          Delete…
+        <button
+          type="button"
+          className="fm-icon-btn"
+          aria-label="Delete…"
+          title="Delete album"
+          onClick={() => setConfirmDelete(true)}
+        >
+          <Trash2 aria-hidden="true" />
         </button>
       )}
       {error && (
@@ -201,6 +242,13 @@ function AlbumDetail({ client, album, onBack, onChanged, onDeleted }: AlbumDetai
   );
 
   return (
-    <LibraryView client={client} albumId={album.id} heading={heading} onAlbumsChanged={onChanged} />
+    <LibraryView
+      client={client}
+      albumId={album.id}
+      heading={heading}
+      albums={albums}
+      onCatalogChanged={onChanged}
+      {...library}
+    />
   );
 }

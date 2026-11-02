@@ -64,7 +64,10 @@ Topology differences from the PRD are covered in [ADR-0001](adr/0001-hybrid-depl
 - ✅ 4.6 Albums (create/rename/delete, add/remove in bulk, cover; never deletes media)
 - ✅ 4.7 Job progress UI (Sources & jobs)
 - ✅ 4.8 LAN/remote web access (photos.borrellofamily.co.uk via the portal)
-- ✅ 4.9 Keyboard navigation (←/→/Esc in the viewer)
+- ✅ 4.9 Keyboard navigation (←/→/Esc in grid and viewer, Ctrl+K search, 0–5 rate)
+- ✅ 4.10 App shell per [design system v1.0](product/FotoMind_Design_System_v1.0.md): workspace
+  tabs, sidebar, docked inspector, status bar, month-grouped grid, density slider, dark/light theme,
+  responsive down to a bottom-sheet inspector
 
 ## EPIC 5: Search
 

@@ -2836,6 +2836,14 @@
             "type": "array",
             "title": "Years"
           },
+          "types": {
+            "items": {
+              "$ref": "#/components/schemas/FacetValue"
+            },
+            "type": "array",
+            "title": "Types",
+            "default": []
+          },
           "total": {
             "type": "integer",
             "title": "Total"

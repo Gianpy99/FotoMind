@@ -933,6 +933,11 @@ export interface components {
             tags: components["schemas"]["FacetValue"][];
             /** Years */
             years: components["schemas"]["FacetValue"][];
+            /**
+             * Types
+             * @default []
+             */
+            types: components["schemas"]["FacetValue"][];
             /** Total */
             total: number;
         };

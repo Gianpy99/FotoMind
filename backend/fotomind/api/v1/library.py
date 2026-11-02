@@ -194,10 +194,16 @@ def library_facets(db: DbDep, _user: UserDep) -> LibraryFacets:
     )
     year = func.extract("year", MediaAsset.sort_at)
     years = db.execute(select(year, func.count()).group_by(year).order_by(year.desc()))
+    types = db.execute(
+        select(MediaAsset.asset_type, func.count())
+        .group_by(MediaAsset.asset_type)
+        .order_by(MediaAsset.asset_type)
+    )
     return LibraryFacets(
         cameras=[FacetValue(value=v, count=n) for v, n in cameras],
         tags=[FacetValue(value=v, count=n) for v, n in tags],
         years=[FacetValue(value=str(int(v)), count=n) for v, n in years if v is not None],
+        types=[FacetValue(value=getattr(t, "value", t), count=n) for t, n in types],
         total=db.scalar(select(func.count()).select_from(MediaAsset)) or 0,
     )
 

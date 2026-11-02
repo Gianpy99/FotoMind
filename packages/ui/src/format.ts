@@ -50,6 +50,36 @@ export function formatVideoInfo(meta: Metadata): string | null {
   return parts.length ? parts.join(" · ") : null;
 }
 
+const RAW_FORMATS = new Set(["ARW", "CR2", "CR3", "DNG", "NEF", "ORF", "RAF", "RW2"]);
+
+/** Upper-case file extension ("JPG", "ARW"), or null. */
+export function fileFormat(name: string): string | null {
+  const match = /\.([a-z0-9]{2,5})$/i.exec(name);
+  const ext = match?.[1];
+  return ext ? ext.toUpperCase() : null;
+}
+
+export function isRawFormat(format: string | null): boolean {
+  return format !== null && RAW_FORMATS.has(format);
+}
+
+/** Local calendar month of a timestamp, for grouping ("2024-07"). */
+export function monthKey(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "unknown";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+export function monthLabel(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown date";
+  return date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
+export function plural(count: number, word: string): string {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
+
 /** Inclusive UTC day range for a year facet value. */
 export function yearRange(year: string): { date_from: string; date_to: string } {
   return { date_from: `${year}-01-01`, date_to: `${year}-12-31` };

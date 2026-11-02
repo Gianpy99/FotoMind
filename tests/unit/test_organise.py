@@ -145,6 +145,8 @@ def test_facets(db_client: TestClient) -> None:
         {"value": "iPhone 15", "count": 1},
     ]
     assert facets["years"] == [{"value": "2024", "count": 2}, {"value": "2023", "count": 2}]
+    types = {f["value"]: f["count"] for f in facets["types"]}
+    assert types == {"photo": 3, "video": 1}
 
 
 def test_albums_crud_membership_and_cover(db_client: TestClient) -> None:

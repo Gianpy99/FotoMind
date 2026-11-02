@@ -158,6 +158,7 @@ class LibraryFacets(BaseModel):
     cameras: list[FacetValue]
     tags: list[FacetValue]
     years: list[FacetValue]
+    types: list[FacetValue] = []
     total: int
 
 

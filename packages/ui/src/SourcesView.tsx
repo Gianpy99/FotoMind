@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import type { FotoMindClient, Job, StorageRoot, SystemStatus } from "@fotomind/api-client";
+import { Pencil, RefreshCw, Square } from "lucide-react";
 import { errorMessage, formatDate } from "./format";
 
 const ACTIVE_POLL_MS = 3000;
@@ -55,10 +56,10 @@ function ExclusionEditor({ root, onSave, onCancel }: ExclusionEditorProps) {
         (originals are untouched).
       </p>
       <div className="fm-inline-form">
-        <button type="submit" disabled={saving}>
+        <button type="submit" className="fm-btn fm-btn-primary" disabled={saving}>
           {saving ? "Saving…" : "Save exclusions"}
         </button>
-        <button type="button" onClick={onCancel}>
+        <button type="button" className="fm-btn fm-btn-ghost" onClick={onCancel}>
           Cancel
         </button>
       </div>
@@ -120,8 +121,8 @@ export function SourcesView({ client }: { client: FotoMindClient }) {
     roots?.find((r) => r.id === id)?.label ?? "—";
 
   return (
-    <section className="fm-sources" aria-labelledby="fm-sources-title">
-      <div className="fm-toolbar">
+    <section className="fm-page fm-sources" aria-labelledby="fm-sources-title">
+      <div className="fm-page-head">
         <h2 id="fm-sources-title">Sources</h2>
       </div>
       {error && (
@@ -168,24 +169,32 @@ export function SourcesView({ client }: { client: FotoMindClient }) {
                         <span className="fm-muted"> ({root.missing_count} missing)</span>
                       )}
                     </td>
-                    <td>{root.availability}</td>
+                    <td>
+                      <span className={`fm-status fm-status-${root.availability}`}>
+                        {root.availability}
+                      </span>
+                    </td>
                     <td>{formatDate(root.last_scan_at)}</td>
                     <td>
                       <button
                         type="button"
+                        className="fm-btn fm-btn-ghost"
                         aria-expanded={editing === root.id}
                         onClick={() => setEditing(editing === root.id ? null : root.id)}
                         title={patterns.join(", ")}
                       >
-                        {patterns.length ? `${patterns.length} rule(s)` : "None"} ✎
+                        {patterns.length ? `${patterns.length} rule(s)` : "None"}
+                        <Pencil aria-hidden="true" />
                       </button>
                     </td>
                     <td>
                       <button
                         type="button"
+                        className="fm-btn"
                         disabled={busy}
                         onClick={() => void act(() => client.scanRoot(root.id))}
                       >
+                        <RefreshCw aria-hidden="true" className={busy ? "fm-spin" : undefined} />
                         {busy ? "Scanning…" : "Scan now"}
                       </button>
                     </td>
@@ -243,7 +252,12 @@ export function SourcesView({ client }: { client: FotoMindClient }) {
                 </td>
                 <td>
                   {isActive(job) && (
-                    <button type="button" onClick={() => void act(() => client.cancelJob(job.id))}>
+                    <button
+                      type="button"
+                      className="fm-btn fm-btn-ghost"
+                      onClick={() => void act(() => client.cancelJob(job.id))}
+                    >
+                      <Square aria-hidden="true" />
                       Cancel
                     </button>
                   )}
