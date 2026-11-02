@@ -34,12 +34,12 @@ was free. Add it to the port registry in `HOSTING-STANDARD.md`.
    [deployment/raspberry-pi/README.md](../../deployment/raspberry-pi/README.md).
    > The Pi's PostgreSQL 15 listens on **5432** (`postgresql.conf`). The FamilyPortal docs
    > and template mention 1433, which does not match the running server.
-2. **Jenkins credential + job.** Run
+2. ? **Jenkins credential + job.** Done (2026-11-02; build #1 deployed). Run
    [jenkins-setup.sh](../../deployment/raspberry-pi/jenkins-setup.sh) on the Pi. It creates
    the `fotomind-database-url` credential from the secrets file on the Pi and the `fotomind`
    pipeline job (polls `main`). From then on, **every push to `main` deploys to production.**
-3. **DNS (admin).** Wix A record `photos` → `89.35.197.23`.
-4. **Caddy (admin).** Add to `reverse-proxy/Caddyfile`, then run `.\deploy.ps1 -SetupCaddy`:
+3. ? **DNS (admin).** Done. Wix A record `photos` → `89.35.197.23`.
+4. ? **Caddy (admin).** Done (FamilyPortal `b9f131e`). Add to `reverse-proxy/Caddyfile`, then run `.\deploy.ps1 -SetupCaddy`:
 
    ```caddyfile
    photos.borrellofamily.co.uk {
@@ -47,14 +47,14 @@ was free. Add it to the port registry in `HOSTING-STANDARD.md`.
    }
    ```
 
-5. **Portal registry (admin).** Add this entry to `public/config/services.json`, both in the
+5. ? **Portal registry (admin).** Done (repo and live copy). Add this entry to `public/config/services.json`, both in the
    repo and in the live copy on the Pi:
 
    ```json
    {
      "id": "fotomind",
      "name": "FotoMind",
-     "description": "Photo & video library with RAW development and AI.",
+     "description": "Libreria foto e video con sviluppo RAW e AI, locale e privata.",
      "url": "https://photos.borrellofamily.co.uk/",
      "location": "pi",
      "category": "Media",
