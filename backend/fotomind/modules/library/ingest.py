@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from fotomind.domain.enums import AssetType, Availability, MediaFileRole
 from fotomind.infrastructure.db.models import MediaAsset, MediaFile, StorageRoot
+from fotomind.modules.metadata.edits import FileValues, apply_file_values
 from fotomind.modules.storage.paths import is_excluded, normalise_relative_path
 
 Sha256 = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
@@ -45,6 +46,10 @@ class FileReport(BaseModel):
     camera_make: ShortText | None = None
     camera_model: ShortText | None = None
     lens_model: ShortText | None = None
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    # Workers re-read originals whose catalogue entry came from an older extractor.
+    extractor_version: int = Field(default=1, ge=0)
     metadata: dict[str, MetadataValue] = Field(default_factory=dict, max_length=64)
 
     @field_validator("relative_path")
@@ -94,15 +99,23 @@ class IngestResult(BaseModel):
 def _apply_report(asset: MediaAsset, report: FileReport, display_name: str) -> None:
     asset.asset_type = report.asset_type
     asset.display_name = display_name[:500]
-    asset.captured_at = report.captured_at
-    asset.sort_at = report.captured_at or report.mtime
     asset.width = report.width
     asset.height = report.height
     asset.duration_s = report.duration_s
-    asset.camera_make = report.camera_make
-    asset.camera_model = report.camera_model
-    asset.lens_model = report.lens_model
     asset.metadata_ = dict(report.metadata)
+    asset.extractor_version = report.extractor_version
+    apply_file_values(
+        asset,
+        FileValues(
+            captured_at=report.captured_at,
+            sort_at=report.captured_at or report.mtime,
+            latitude=report.latitude,
+            longitude=report.longitude,
+            camera_make=report.camera_make,
+            camera_model=report.camera_model,
+            lens_model=report.lens_model,
+        ),
+    )
 
 
 def _asset_with_content(session: Session, sha256: str) -> MediaAsset | None:
@@ -160,6 +173,11 @@ def ingest_batch(
             # metadata of the copy that created the asset.
             if len(asset.files) == 1:
                 _apply_report(asset, report, display_name)
+            else:
+                # Still record the extractor so the duplicate is not re-read on every scan.
+                asset.extractor_version = max(
+                    asset.extractor_version or 0, report.extractor_version
+                )
 
         file.role = report.role
         file.mime_type = report.mime_type

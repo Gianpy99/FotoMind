@@ -16,6 +16,7 @@ import {
   Image as ImageIcon,
   Images,
   Library,
+  Map as MapIcon,
   Moon,
   Plus,
   Search,
@@ -26,9 +27,16 @@ import {
   BookImage,
   type LucideProps,
 } from "lucide-react";
-import type { Album, CurrentUser, FotoMindClient, LibraryFacets } from "@fotomind/api-client";
+import type {
+  Album,
+  CurrentUser,
+  FotoMindClient,
+  LibraryFacets,
+  Location,
+} from "@fotomind/api-client";
 import { AlbumsView } from "./AlbumsView";
 import { LibraryView } from "./LibraryView";
+import { MapView, type MapFocus } from "./MapView";
 import { SourcesView } from "./SourcesView";
 import { errorMessage, plural } from "./format";
 import { useTheme } from "./theme";
@@ -44,6 +52,7 @@ type MediaFilter = "all" | "photo" | "video";
 type View =
   | { kind: "library"; type: MediaFilter }
   | { kind: "albums"; albumId: string | null }
+  | { kind: "map"; focus: MapFocus | null }
   | { kind: "sources" };
 
 type Icon = ComponentType<LucideProps>;
@@ -175,6 +184,14 @@ export function AppShell({ client, surface }: AppShellProps) {
   }, []);
 
   const catalogChanged = useCallback(() => setCatalogVersion((n) => n + 1), []);
+  const showOnMap = useCallback(
+    (location: Location) =>
+      setView({
+        kind: "map",
+        focus: { latitude: location.latitude, longitude: location.longitude },
+      }),
+    [],
+  );
 
   const clearSearch = useCallback(() => {
     window.clearTimeout(searchTimer.current);
@@ -216,6 +233,18 @@ export function AppShell({ client, surface }: AppShellProps) {
         facets={facets}
         albums={albums ?? []}
         onClearSearch={clearSearch}
+        onCatalogChanged={catalogChanged}
+        onShowOnMap={showOnMap}
+      />
+    );
+  } else if (view.kind === "map") {
+    content = (
+      <MapView
+        client={client}
+        query={query}
+        albums={albums ?? []}
+        tagSuggestions={facets?.tags.map((t) => t.value) ?? []}
+        focus={view.focus}
         onCatalogChanged={catalogChanged}
       />
     );
@@ -267,7 +296,7 @@ export function AppShell({ client, surface }: AppShellProps) {
             ref={searchRef}
             type="search"
             aria-label="Search"
-            placeholder="Search names, folders, cameras, tags…"
+            placeholder="Search names, places, folders, cameras, tags…"
             value={searchText}
             onChange={(e) => changeSearch(e.target.value)}
             onKeyDown={(e) => e.key === "Escape" && clearSearch()}
@@ -328,6 +357,13 @@ export function AppShell({ client, surface }: AppShellProps) {
             count={albums?.length}
             active={view.kind === "albums" && view.albumId === null}
             onClick={() => setView({ kind: "albums", albumId: null })}
+          />
+          <NavItem
+            icon={MapIcon}
+            label="Map"
+            count={facets?.located}
+            active={view.kind === "map"}
+            onClick={() => setView({ kind: "map", focus: null })}
           />
           <NavItem
             icon={FolderSync}

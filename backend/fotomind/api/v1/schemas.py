@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
@@ -14,6 +14,7 @@ from fotomind.domain.enums import (
     MediaFileRole,
 )
 from fotomind.infrastructure.db.models import MediaAsset
+from fotomind.modules import places
 
 
 class _Orm(BaseModel):
@@ -53,10 +54,51 @@ class JobOut(_Orm):
     finished_at: datetime | None
 
 
+class LocationOut(BaseModel):
+    """Where an asset is shown on the map: its own position, or a confirmed place tag."""
+
+    latitude: float
+    longitude: float
+    source: Literal["file", "manual", "tag"]
+    label: str | None = None
+    # The place tag supplying the position (source "tag").
+    tag: str | None = None
+
+
+def effective_location(asset: MediaAsset) -> LocationOut | None:
+    if asset.latitude is not None and asset.longitude is not None:
+        source = "manual" if asset.location_source == "manual" else "file"
+        return LocationOut(
+            latitude=asset.latitude,
+            longitude=asset.longitude,
+            source=source,
+            label=asset.place_name,
+        )
+    if asset.location_source == "cleared":
+        return None
+    places = [
+        t
+        for t in asset.tags
+        if t.place_status == "confirmed" and t.latitude is not None and t.longitude is not None
+    ]
+    if not places:
+        return None
+    # The most specific place wins (a city over a country).
+    best = min(places, key=lambda t: (t.place_kind == "country", t.name_key))
+    return LocationOut(
+        latitude=best.latitude,  # type: ignore[arg-type]
+        longitude=best.longitude,  # type: ignore[arg-type]
+        source="tag",
+        label=best.place_label or best.name,
+        tag=best.name,
+    )
+
+
 class AssetSummary(_Orm):
     id: uuid.UUID
     asset_type: AssetType
     display_name: str
+    title: str | None = None
     sort_at: datetime
     captured_at: datetime | None
     width: int | None
@@ -65,6 +107,7 @@ class AssetSummary(_Orm):
     rating: int
     availability: Availability
     tags: list[str] = []
+    location: LocationOut | None = None
     # Relative to the API origin; versioned by content so browsers can cache it forever.
     thumbnail_url: str | None = None
 
@@ -77,6 +120,7 @@ class AssetSummary(_Orm):
     def from_asset(cls, asset: MediaAsset) -> "AssetSummary":
         out = cls.model_validate(asset)
         out.thumbnail_url = thumbnail_url(asset)
+        out.location = effective_location(asset)
         return out
 
 
@@ -101,12 +145,18 @@ class AlbumRef(BaseModel):
 
 
 class AssetDetail(AssetSummary):
+    description: str | None = None
     camera_make: str | None
     camera_model: str | None
     lens_model: str | None
     metadata: dict[str, Any]
     files: list[MediaFileOut]
     albums: list[AlbumRef] = []
+    # Fields changed by hand, and what the original file says for them (for "revert").
+    edited_fields: list[str] = []
+    file_values: dict[str, Any] = {}
+    # "Near Rome, Lazio, Italy" for GPS positions without a place name.
+    location_near: str | None = None
 
     @classmethod
     def from_asset(  # type: ignore[override]
@@ -130,14 +180,23 @@ class AssetDetail(AssetSummary):
             for f in asset.files
         ]
         summary = AssetSummary.from_asset(asset)
+        near = None
+        loc = summary.location
+        if loc is not None and loc.source != "tag" and not loc.label:
+            place = places.nearest(loc.latitude, loc.longitude)
+            near = place.label if place else None
         return cls(
             **summary.model_dump(),
+            description=asset.description,
             camera_make=asset.camera_make,
             camera_model=asset.camera_model,
             lens_model=asset.lens_model,
             metadata=asset.metadata_,
             files=files,
             albums=albums or [],
+            edited_fields=list(asset.edited_fields or []),
+            file_values=dict(asset.file_values or {}),
+            location_near=near,
         )
 
 
@@ -159,7 +218,70 @@ class LibraryFacets(BaseModel):
     tags: list[FacetValue]
     years: list[FacetValue]
     types: list[FacetValue] = []
+    # Assets with a map position (own GPS/manual, or a confirmed place tag).
+    located: int = 0
     total: int
+
+
+class PlaceOut(BaseModel):
+    name: str
+    label: str
+    kind: Literal["city", "country"]
+    country_code: str
+    latitude: float
+    longitude: float
+
+    @classmethod
+    def from_place(cls, place: places.Place) -> "PlaceOut":
+        return cls(
+            name=place.name,
+            label=place.label,
+            kind=place.kind,  # type: ignore[arg-type]
+            country_code=place.country_code,
+            latitude=place.latitude,
+            longitude=place.longitude,
+        )
+
+
+class TagPlaceSuggestion(BaseModel):
+    tag: str
+    count: int
+    candidates: list[PlaceOut]
+
+
+class TagPlaceOut(BaseModel):
+    tag: str
+    count: int
+    status: Literal["confirmed", "rejected"]
+    label: str | None = None
+    kind: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+
+
+class TagPlaces(BaseModel):
+    """Tags that look like places (awaiting a decision) and the decisions taken."""
+
+    suggestions: list[TagPlaceSuggestion]
+    decided: list[TagPlaceOut]
+    attribution: str = places.ATTRIBUTION
+
+
+class MapPoint(BaseModel):
+    id: uuid.UUID
+    latitude: float
+    longitude: float
+    source: Literal["file", "manual", "tag"]
+    asset_type: AssetType
+    display_name: str
+    sort_at: datetime
+    thumbnail_url: str | None
+
+
+class MapPoints(BaseModel):
+    items: list[MapPoint]
+    # More located assets matched than were returned (newest first).
+    truncated: bool
 
 
 class AlbumOut(BaseModel):

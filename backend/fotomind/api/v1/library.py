@@ -6,11 +6,11 @@ import uuid
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import and_, delete, exists, func, insert, or_, select, update
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, aliased, selectinload
 
 from fotomind.api.auth import UserDep
 from fotomind.api.deps import DbDep, ThumbsDep
@@ -38,6 +38,7 @@ from fotomind.modules.library.organise import (
     get_or_create_tags,
     normalise_tag_name,
 )
+from fotomind.modules.metadata.edits import MetadataEdit, apply_edit
 
 router = APIRouter(tags=["library"])
 
@@ -65,20 +66,25 @@ def _contains(term: str) -> str:
 
 
 def _search_condition(term: str) -> Any:
-    """One search term matches the name, camera, lens, any file path or any tag."""
+    """One search term matches name, title, description, place, camera, lens, path or tag."""
     pattern = _contains(term)
 
     def like(column: Any) -> Any:
         return column.ilike(pattern, escape="\\")
 
+    link = asset_tag.alias()
+    named = aliased(Tag)
     return or_(
         like(MediaAsset.display_name),
+        like(MediaAsset.title),
+        like(MediaAsset.description),
+        like(MediaAsset.place_name),
         like(MediaAsset.camera_make),
         like(MediaAsset.camera_model),
         like(MediaAsset.lens_model),
         exists().where(MediaFile.asset_id == MediaAsset.id, like(MediaFile.relative_path)),
         exists().where(
-            asset_tag.c.asset_id == MediaAsset.id, asset_tag.c.tag_id == Tag.id, like(Tag.name)
+            link.c.asset_id == MediaAsset.id, link.c.tag_id == named.id, like(named.name)
         ),
     )
 
@@ -87,12 +93,28 @@ def _day_start(day: date) -> datetime:
     return datetime.combine(day, time.min, tzinfo=UTC)
 
 
-@router.get("/assets", response_model=AssetPage)
-def list_assets(
-    db: DbDep,
-    _user: UserDep,
-    limit: Annotated[int, Query(ge=1, le=200)] = 100,
-    cursor: str | None = None,
+def tag_located_condition() -> Any:
+    """The asset has no position of its own (nor a cleared one) but a confirmed place tag."""
+    # Aliased so the subquery never correlates with a Tag joined by the outer query.
+    link = asset_tag.alias("located_link")
+    place = aliased(Tag, name="located_tag")
+    return and_(
+        MediaAsset.latitude.is_(None),
+        MediaAsset.location_source.is_(None),
+        exists().where(
+            link.c.asset_id == MediaAsset.id,
+            link.c.tag_id == place.id,
+            place.place_status == "confirmed",
+            place.latitude.is_not(None),
+        ),
+    )
+
+
+def located_condition() -> Any:
+    return or_(MediaAsset.latitude.is_not(None), tag_located_condition())
+
+
+def asset_filters(
     asset_type: AssetType | None = None,
     availability: Availability | None = None,
     storage_root_id: uuid.UUID | None = None,
@@ -103,12 +125,13 @@ def list_assets(
     camera: Annotated[str | None, Query(max_length=200)] = None,
     date_from: date | None = None,
     date_to: date | None = None,
-    sort: Sort = "newest",
-) -> AssetPage:
-    """Capture time (falling back to file mtime) order with keyset pagination.
+    located: bool | None = None,
+) -> list[Any]:
+    """Shared library filters (list, map).
 
-    ``q`` terms are ANDed; each matches name, camera, lens, file path or tag. ``tag`` may be
-    repeated (all must match). ``date_from``/``date_to`` are inclusive UTC days.
+    ``q`` terms are ANDed; each matches name, title, description, place, camera, lens, file
+    path or tag. ``tag`` may be repeated (all must match). ``date_from``/``date_to`` are
+    inclusive UTC days. ``located`` keeps assets with (or without) a map position.
     """
     filters: list[Any] = []
     if asset_type is not None:
@@ -126,11 +149,13 @@ def list_assets(
     if min_rating:
         filters.append(MediaAsset.rating >= min_rating)
     for name in tag or []:
+        link = asset_tag.alias()
+        named = aliased(Tag)
         filters.append(
             exists().where(
-                asset_tag.c.asset_id == MediaAsset.id,
-                asset_tag.c.tag_id == Tag.id,
-                Tag.name_key == " ".join(name.split()).casefold(),
+                link.c.asset_id == MediaAsset.id,
+                link.c.tag_id == named.id,
+                named.name_key == " ".join(name.split()).casefold(),
             )
         )
     if album_id is not None:
@@ -143,7 +168,24 @@ def list_assets(
         filters.append(MediaAsset.sort_at >= _day_start(date_from))
     if date_to is not None:
         filters.append(MediaAsset.sort_at < _day_start(date_to + timedelta(days=1)))
+    if located is not None:
+        filters.append(located_condition() if located else ~located_condition())
+    return filters
 
+
+FiltersDep = Annotated[list[Any], Depends(asset_filters)]
+
+
+@router.get("/assets", response_model=AssetPage)
+def list_assets(
+    db: DbDep,
+    _user: UserDep,
+    filters: FiltersDep,
+    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+    cursor: str | None = None,
+    sort: Sort = "newest",
+) -> AssetPage:
+    """Capture time (falling back to file mtime) order with keyset pagination."""
     total = db.scalar(select(func.count()).select_from(MediaAsset).where(*filters)) or 0
 
     query = select(MediaAsset).where(*filters).options(selectinload(MediaAsset.tags))
@@ -204,6 +246,8 @@ def library_facets(db: DbDep, _user: UserDep) -> LibraryFacets:
         tags=[FacetValue(value=v, count=n) for v, n in tags],
         years=[FacetValue(value=str(int(v)), count=n) for v, n in years if v is not None],
         types=[FacetValue(value=getattr(t, "value", t), count=n) for t, n in types],
+        located=db.scalar(select(func.count()).select_from(MediaAsset).where(located_condition()))
+        or 0,
         total=db.scalar(select(func.count()).select_from(MediaAsset)) or 0,
     )
 
@@ -251,6 +295,7 @@ class AssetUpdate(_TagNames):
 
     rating: int | None = Field(default=None, ge=0, le=5)
     tags: TagList | None = None
+    metadata: MetadataEdit | None = None
 
 
 class BulkAssetUpdate(_TagNames):
@@ -258,6 +303,7 @@ class BulkAssetUpdate(_TagNames):
     rating: int | None = Field(default=None, ge=0, le=5)
     add_tags: TagList = []
     remove_tags: TagList = []
+    metadata: MetadataEdit | None = None
 
 
 class BulkResult(BaseModel):
@@ -266,12 +312,14 @@ class BulkResult(BaseModel):
 
 @router.patch("/assets/{asset_id}", response_model=AssetDetail)
 def update_asset(asset_id: uuid.UUID, body: AssetUpdate, db: DbDep, _user: UserDep) -> AssetDetail:
-    """Rate or tag one asset. Catalogue-only: original files are never modified."""
+    """Rate, tag or edit one asset. Catalogue-only: original files are never modified."""
     asset = db.get(MediaAsset, asset_id)
     if asset is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Asset not found")
     if body.rating is not None:
         asset.rating = body.rating
+    if body.metadata is not None:
+        apply_edit(asset, body.metadata)
     if body.tags is not None:
         asset.tags = get_or_create_tags(db, body.tags)
         db.flush()
@@ -283,8 +331,13 @@ def update_asset(asset_id: uuid.UUID, body: AssetUpdate, db: DbDep, _user: UserD
 
 @router.post("/assets/bulk", response_model=BulkResult)
 def bulk_update_assets(body: BulkAssetUpdate, db: DbDep, _user: UserDep) -> BulkResult:
-    """Apply a rating and/or add/remove tags across a selection."""
+    """Apply a rating, add/remove tags and/or metadata edits across a selection."""
     ids = existing_asset_ids(db, body.asset_ids)
+    if ids and body.metadata is not None and not body.metadata.is_empty():
+        # Per asset: date shifts and "remember the file value" depend on each asset's state.
+        for asset in db.scalars(select(MediaAsset).where(MediaAsset.id.in_(ids))):
+            apply_edit(asset, body.metadata)
+        db.flush()
     if ids and body.rating is not None:
         db.execute(
             update(MediaAsset)

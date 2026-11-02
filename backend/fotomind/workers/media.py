@@ -7,6 +7,7 @@ exifread, PyAV) are imported lazily so the API image does not need them.
 import hashlib
 import io
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
@@ -17,6 +18,12 @@ from fotomind.domain.enums import AssetType, MediaFileRole
 logger = logging.getLogger(__name__)
 
 MetadataValue = str | int | float | bool | None
+
+# Bumped when extraction learns new fields: workers then re-read known originals once.
+# 2: GPS position.
+EXTRACTOR_VERSION = 2
+
+_ISO6709 = re.compile(r"^\s*([+-]\d{1,2}(?:\.\d+)?)([+-]\d{1,3}(?:\.\d+)?)")
 
 
 @dataclass(frozen=True)
@@ -54,6 +61,8 @@ class Extracted:
     camera_make: str | None = None
     camera_model: str | None = None
     lens_model: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     metadata: dict[str, MetadataValue] = field(default_factory=dict)
     thumbnail: bytes | None = None
 
@@ -118,7 +127,50 @@ def parse_exif_datetime(value: Any, offset: Any = None) -> tuple[datetime | None
     return naive.astimezone(), False
 
 
+def _dms_to_degrees(value: Any, ref: Any) -> float | None:
+    """EXIF degrees/minutes/seconds rationals plus an N/S/E/W reference -> signed degrees."""
+    if value is None:
+        return None
+    parts = list(value) if isinstance(value, list | tuple) else [value]
+    numbers = [_to_float(p) for p in parts[:3]]
+    if not numbers or any(n is None for n in numbers):
+        return None
+    degrees = sum(n / 60**i for i, n in enumerate(numbers) if n is not None)
+    direction = (clean_text(ref, 4) or "").upper()
+    return -degrees if direction in ("S", "W") else degrees
+
+
+def valid_position(latitude: float | None, longitude: float | None) -> bool:
+    if latitude is None or longitude is None:
+        return False
+    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        return False
+    # 0,0 ("null island") is what devices write when they had no fix.
+    return not (abs(latitude) < 1e-6 and abs(longitude) < 1e-6)
+
+
+def _apply_position(out: Extracted, latitude: float | None, longitude: float | None) -> None:
+    if valid_position(latitude, longitude):
+        out.latitude = round(latitude, 6)  # type: ignore[arg-type]
+        out.longitude = round(longitude, 6)  # type: ignore[arg-type]
+
+
+def parse_iso6709(value: Any) -> tuple[float, float] | None:
+    """QuickTime/MP4 location such as "+41.8919+012.5113+050.000/" -> (lat, lon)."""
+    text = clean_text(value, 80)
+    match = _ISO6709.match(text or "")
+    if not match:
+        return None
+    lat, lon = float(match.group(1)), float(match.group(2))
+    return (lat, lon) if valid_position(lat, lon) else None
+
+
 def _apply_exif_fields(out: Extracted, fields: dict[str, Any]) -> None:
+    _apply_position(
+        out,
+        _dms_to_degrees(fields.get("gps_lat"), fields.get("gps_lat_ref")),
+        _dms_to_degrees(fields.get("gps_lon"), fields.get("gps_lon_ref")),
+    )
     captured, tz_known = parse_exif_datetime(fields.get("datetime"), fields.get("offset"))
     if captured is not None:
         out.captured_at = captured
@@ -144,7 +196,12 @@ def _pillow_exif_fields(exif: Any) -> dict[str, Any]:
     from PIL import ExifTags
 
     sub = exif.get_ifd(ExifTags.IFD.Exif)
+    gps = exif.get_ifd(ExifTags.IFD.GPSInfo)
     return {
+        "gps_lat_ref": gps.get(1),
+        "gps_lat": gps.get(2),
+        "gps_lon_ref": gps.get(3),
+        "gps_lon": gps.get(4),
         "datetime": sub.get(36867) or sub.get(36868) or exif.get(306),
         "offset": sub.get(36881) or sub.get(36880) or sub.get(36882),
         "make": exif.get(271),
@@ -267,6 +324,10 @@ def _exifread_fields(path: Path) -> dict[str, Any]:
         return None
 
     return {
+        "gps_lat_ref": get("GPS GPSLatitudeRef"),
+        "gps_lat": get("GPS GPSLatitude"),
+        "gps_lon_ref": get("GPS GPSLongitudeRef"),
+        "gps_lon": get("GPS GPSLongitude"),
         "datetime": get("EXIF DateTimeOriginal", "EXIF DateTimeDigitized", "Image DateTime"),
         "offset": get("EXIF OffsetTimeOriginal", "EXIF OffsetTime"),
         "make": get("Image Make"),
@@ -305,6 +366,13 @@ def _extract_video(path: Path, size_px: int) -> Extracted:
         )
         out.camera_make = clean_text(meta.get("com.apple.quicktime.make") or meta.get("make"))
         out.camera_model = clean_text(meta.get("com.apple.quicktime.model") or meta.get("model"))
+        position = parse_iso6709(
+            meta.get("com.apple.quicktime.location.iso6709")
+            or meta.get("location")
+            or meta.get("location-eng")
+        )
+        if position:
+            _apply_position(out, *position)
 
         stream = next(iter(container.streams.video), None)
         if stream is None:

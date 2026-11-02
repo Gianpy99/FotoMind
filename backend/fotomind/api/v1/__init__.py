@@ -1,11 +1,12 @@
 from fastapi import APIRouter
 
-from fotomind.api.v1 import albums, health, library, session, storage, worker
+from fotomind.api.v1 import albums, health, library, places, session, storage, worker
 
 router = APIRouter()
 router.include_router(health.router)
 router.include_router(session.router)
 router.include_router(library.router)
 router.include_router(albums.router)
+router.include_router(places.router)
 router.include_router(storage.router)
 router.include_router(worker.router)

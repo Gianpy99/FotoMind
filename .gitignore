@@ -27,6 +27,8 @@ apps/desktop/src-tauri/gen/
 # Runtime data, caches and media: never commit personal photos (PRD §11, 9.11)
 .data/
 data/
+# ...except the bundled GeoNames place list (code data, not personal data).
+!backend/fotomind/modules/places/data/
 var/
 *.cr2
 *.CR2

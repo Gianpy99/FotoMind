@@ -20,7 +20,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data: blob: http://127.0.0.1:8000 https://photos.borrellofamily.co.uk; connect-src 'self' http://127.0.0.1:8000 https://photos.borrellofamily.co.uk; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; img-src 'self' data: blob: http://127.0.0.1:8000 https://photos.borrellofamily.co.uk https://tile.openstreetmap.org; connect-src 'self' http://127.0.0.1:8000 https://photos.borrellofamily.co.uk; style-src 'self' 'unsafe-inline'"
     }
   },
   "bundle": {

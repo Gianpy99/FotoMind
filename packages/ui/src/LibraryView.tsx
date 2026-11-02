@@ -15,8 +15,10 @@ import {
   Grid2x2,
   Grid3x3,
   Image as ImageIcon,
+  MapPin,
   Maximize2,
   MousePointerClick,
+  Pencil,
   Play,
   X,
 } from "lucide-react";
@@ -27,9 +29,11 @@ import type {
   FotoMindClient,
   LibraryFacets,
   ListAssetsParams,
+  MetadataEdit,
 } from "@fotomind/api-client";
-import { AssetInspector, isTyping } from "./AssetInspector";
+import { AssetInspector, isTyping, type AssetInspectorProps } from "./AssetInspector";
 import { AssetViewer } from "./AssetViewer";
+import { MetadataEditor } from "./MetadataEditor";
 import { StarDisplay, StarRating } from "./StarRating";
 import {
   errorMessage,
@@ -42,6 +46,8 @@ import {
 } from "./format";
 
 const PAGE_SIZE = 100;
+// The bulk endpoint accepts up to 1000 ids per call.
+const BULK_CHUNK = 1000;
 const TILE_SIZE_KEY = "fotomind.tileSize";
 const TILE_SIZES = { min: 110, max: 280, default: 170 };
 
@@ -81,6 +87,7 @@ export interface LibraryViewProps {
   onClearSearch?(): void;
   /** Ratings, tags or album membership changed. */
   onCatalogChanged?(): void;
+  onShowOnMap?: AssetInspectorProps["onShowOnMap"];
 }
 
 function storedTileSize(): number {
@@ -122,6 +129,7 @@ export function LibraryView({
   albums = [],
   onClearSearch,
   onCatalogChanged,
+  onShowOnMap,
 }: LibraryViewProps) {
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -135,6 +143,7 @@ export function LibraryView({
   const [bulkTag, setBulkTag] = useState("");
   const [bulkAlbum, setBulkAlbum] = useState("");
   const [busy, setBusy] = useState(false);
+  const [editingSelection, setEditingSelection] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const fetchPage = useCallback(
@@ -331,11 +340,33 @@ export function LibraryView({
     });
   }
 
+  /** Edit info of the whole selection; errors are shown by the editor. */
+  async function editSelection(metadata: MetadataEdit) {
+    let updated = 0;
+    for (let i = 0; i < ids.length; i += BULK_CHUNK) {
+      const chunk = ids.slice(i, i + BULK_CHUNK);
+      updated += (await client.bulkUpdateAssets({ asset_ids: chunk, metadata })).updated;
+    }
+    setNotice(`Updated the info of ${updated} item(s)`);
+    setReload((n) => n + 1);
+    onCatalogChanged?.();
+  }
+
   function assetChanged(updated: AssetSummary) {
     setState((s) => ({
       ...s,
       items: s.items.map((a) =>
-        a.id === updated.id ? { ...a, rating: updated.rating, tags: updated.tags } : a,
+        a.id === updated.id
+          ? {
+              ...a,
+              rating: updated.rating,
+              tags: updated.tags,
+              title: updated.title,
+              location: updated.location,
+              captured_at: updated.captured_at,
+              sort_at: updated.sort_at,
+            }
+          : a,
       ),
     }));
     onCatalogChanged?.();
@@ -536,6 +567,16 @@ export function LibraryView({
                 Remove from album
               </button>
             )}
+            <button
+              type="button"
+              className="fm-btn"
+              disabled={busy}
+              onClick={() => setEditingSelection(true)}
+              title="Title, description, date, location, camera for all selected items"
+            >
+              <Pencil aria-hidden="true" />
+              Edit info…
+            </button>
             <span className="fm-bulkbar-end">
               <button
                 type="button"
@@ -655,6 +696,14 @@ export function LibraryView({
                         />
                         <div className="fm-tile-meta">
                           {asset.rating > 0 && <StarDisplay value={asset.rating} />}
+                          {asset.location && (
+                            <span
+                              className="fm-tile-located"
+                              title={asset.location.label ?? "Has a location"}
+                            >
+                              <MapPin aria-label="Has a location" />
+                            </span>
+                          )}
                         </div>
                       </li>
                     );
@@ -682,6 +731,7 @@ export function LibraryView({
             albums={albums}
             tagSuggestions={tagNames}
             onChanged={assetChanged}
+            onShowOnMap={onShowOnMap}
             hotkeys
             preview
             actions={
@@ -734,6 +784,16 @@ export function LibraryView({
           albums={albums}
           tagSuggestions={tagNames}
           onChanged={assetChanged}
+          onShowOnMap={onShowOnMap}
+        />
+      )}
+
+      {editingSelection && (
+        <MetadataEditor
+          client={client}
+          count={selected.size}
+          onSubmit={editSelection}
+          onClose={() => setEditingSelection(false)}
         />
       )}
     </section>

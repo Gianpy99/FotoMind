@@ -26,6 +26,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -83,6 +84,13 @@ class MediaAsset(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "media_asset"
     __table_args__ = (
         Index("ix_media_asset_sort", "sort_at", "id"),
+        Index(
+            "ix_media_asset_located",
+            "latitude",
+            "longitude",
+            postgresql_where=text("latitude IS NOT NULL"),
+            sqlite_where=text("latitude IS NOT NULL"),
+        ),
         _trigram_index("ix_media_asset_display_name_trgm", "display_name"),
     )
 
@@ -98,6 +106,19 @@ class MediaAsset(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     camera_model: Mapped[str | None] = mapped_column(String(200))
     lens_model: Mapped[str | None] = mapped_column(String(200))
     rating: Mapped[int] = mapped_column(SmallInteger, default=0)
+    title: Mapped[str | None] = mapped_column(String(300))
+    description: Mapped[str | None] = mapped_column(Text)
+    latitude: Mapped[float | None] = mapped_column(Float)
+    longitude: Mapped[float | None] = mapped_column(Float)
+    # "file" (GPS in the original), "manual", or "cleared" (no location, ignore place tags).
+    location_source: Mapped[str | None] = mapped_column(String(16))
+    place_name: Mapped[str | None] = mapped_column(String(200))
+    # Fields the user changed by hand (EDITABLE_FIELDS); re-scans keep the edit and only
+    # refresh ``file_values``, the values read from the original (for "revert").
+    edited_fields: Mapped[list[str]] = mapped_column(JsonDict, default=list)
+    file_values: Mapped[dict[str, Any]] = mapped_column(JsonDict, default=dict)
+    # Version of the worker's metadata extractor that last read the original.
+    extractor_version: Mapped[int] = mapped_column(Integer, default=0)
     availability: Mapped[Availability] = mapped_column(
         _enum(Availability), default=Availability.ONLINE
     )
@@ -186,6 +207,13 @@ class Tag(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     name: Mapped[str] = mapped_column(String(100))
     name_key: Mapped[str] = mapped_column(String(100), unique=True)
+    # A place-name tag the user confirmed ("confirmed", with coordinates) or dismissed
+    # ("rejected"); assets without their own location appear on the map at a confirmed tag.
+    place_status: Mapped[str | None] = mapped_column(String(16))
+    place_label: Mapped[str | None] = mapped_column(String(200))
+    place_kind: Mapped[str | None] = mapped_column(String(16))
+    latitude: Mapped[float | None] = mapped_column(Float)
+    longitude: Mapped[float | None] = mapped_column(Float)
 
 
 class Album(UUIDPrimaryKeyMixin, TimestampMixin, Base):

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import type { Album, AssetSummary, FotoMindClient } from "@fotomind/api-client";
-import { AssetInspector, isTyping } from "./AssetInspector";
+import { AssetInspector, isTyping, type AssetInspectorProps } from "./AssetInspector";
 
 export interface AssetViewerProps {
   client: FotoMindClient;
@@ -14,6 +14,7 @@ export interface AssetViewerProps {
   albums?: Album[];
   tagSuggestions?: string[];
   onChanged?(asset: AssetSummary): void;
+  onShowOnMap?: AssetInspectorProps["onShowOnMap"];
 }
 
 export function AssetViewer({
@@ -27,6 +28,7 @@ export function AssetViewer({
   albums,
   tagSuggestions,
   onChanged,
+  onShowOnMap,
 }: AssetViewerProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -84,6 +86,7 @@ export function AssetViewer({
           albums={albums}
           tagSuggestions={tagSuggestions}
           onChanged={onChanged}
+          onShowOnMap={onShowOnMap}
           hotkeys
           actions={
             <button type="button" className="fm-icon-btn" onClick={onClose} aria-label="Close">

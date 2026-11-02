@@ -14,7 +14,13 @@ from typing import Any
 from fotomind.modules.storage.paths import is_excluded
 from fotomind.workers.api import WorkerApi
 from fotomind.workers.config import WorkerSettings
-from fotomind.workers.media import MediaKind, extract, kind_for, sha256_file
+from fotomind.workers.media import (
+    EXTRACTOR_VERSION,
+    MediaKind,
+    extract,
+    kind_for,
+    sha256_file,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +107,9 @@ def _report(rel: str, stat: os.stat_result, sha: str, kind: MediaKind, ex: Any) 
         "camera_make": ex.camera_make,
         "camera_model": ex.camera_model,
         "lens_model": ex.lens_model,
+        "latitude": ex.latitude,
+        "longitude": ex.longitude,
+        "extractor_version": EXTRACTOR_VERSION,
         "metadata": ex.metadata,
     }
 
@@ -180,6 +189,7 @@ def run_scan_job(
                 and prev["size_bytes"] == stat.st_size
                 and _same_mtime(prev["mtime"], _mtime(stat))
                 and not prev["needs_thumbnail"]
+                and prev.get("extractor_version", 0) >= EXTRACTOR_VERSION
             ):
                 unchanged.append(rel)
             else:

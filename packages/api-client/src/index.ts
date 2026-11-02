@@ -17,9 +17,27 @@ export type LibraryFacets = Schemas["LibraryFacets"];
 export type FacetValue = Schemas["FacetValue"];
 /** Request bodies: fields with a server-side default may be omitted. */
 type WithOptional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
-export type AssetUpdate = Schemas["AssetUpdate"];
-export type BulkAssetUpdate = WithOptional<Schemas["BulkAssetUpdate"], "add_tags" | "remove_tags">;
+/** Catalogue-only edits; omitted fields are unchanged and "" clears a text field. */
+export type MetadataEdit = WithOptional<Schemas["MetadataEdit"], "clear_location" | "revert">;
+export type EditableField = Schemas["MetadataEdit"]["revert"][number];
+export type AssetUpdate = Omit<Schemas["AssetUpdate"], "metadata"> & {
+  metadata?: MetadataEdit | null;
+};
+export type BulkAssetUpdate = Omit<
+  WithOptional<Schemas["BulkAssetUpdate"], "add_tags" | "remove_tags">,
+  "metadata"
+> & { metadata?: MetadataEdit | null };
 export type BulkResult = Schemas["BulkResult"];
+export type Location = Schemas["LocationOut"];
+export type Place = Schemas["PlaceOut"];
+export type TagPlaces = Schemas["TagPlaces"];
+export type TagPlaceSuggestion = Schemas["TagPlaceSuggestion"];
+export type TagPlace = Schemas["TagPlaceOut"];
+export type TagPlaceDecision = Omit<Schemas["TagPlaceDecision"], "place"> & {
+  place?: WithOptional<Schemas["TagPlaceIn"], "kind"> | null;
+};
+export type MapPoint = Schemas["MapPoint"];
+export type MapPoints = Schemas["MapPoints"];
 export type AlbumCreate = WithOptional<Schemas["AlbumCreate"], "asset_ids">;
 export type AlbumUpdate = Schemas["AlbumUpdate"];
 export type StorageRootUpdate = Schemas["StorageRootUpdate"];
@@ -32,7 +50,7 @@ export interface ListAssetsParams {
   asset_type?: AssetType;
   availability?: Availability;
   storage_root_id?: string;
-  /** Free text: every term must match the name, camera, lens, file path or a tag. */
+  /** Free text: every term must match the name, title, description, place, camera, lens, file path or a tag. */
   q?: string;
   min_rating?: number;
   /** Repeatable: assets must carry every tag. */
@@ -42,8 +60,13 @@ export interface ListAssetsParams {
   /** Inclusive UTC days, YYYY-MM-DD. */
   date_from?: string;
   date_to?: string;
+  /** Only assets with (true) or without (false) a map position. */
+  located?: boolean;
   sort?: "newest" | "oldest";
 }
+
+/** The library filters (no paging) used by the map. */
+export type MapParams = Omit<ListAssetsParams, "limit" | "cursor" | "sort">;
 
 export class ApiError extends Error {
   constructor(
@@ -76,6 +99,10 @@ export interface FotoMindClient {
   deleteAlbum(id: string): Promise<void>;
   addToAlbum(id: string, assetIds: string[]): Promise<Album>;
   removeFromAlbum(id: string, assetIds: string[]): Promise<Album>;
+  searchPlaces(q: string, limit?: number): Promise<Place[]>;
+  tagPlaces(): Promise<TagPlaces>;
+  decideTagPlace(body: TagPlaceDecision): Promise<TagPlaces>;
+  mapAssets(params?: MapParams): Promise<MapPoints>;
   /** Absolute (or origin-relative) URL for an API-relative path such as a thumbnail_url. */
   url(path: string): string;
 }
@@ -88,7 +115,7 @@ export function createClient(baseUrl = "", fetchImpl: typeof fetch = fetch): Fot
   const root = baseUrl.replace(/\/+$/, "");
 
   async function request<T>(
-    method: "GET" | "POST" | "PATCH" | "DELETE",
+    method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
     path: string,
     body?: unknown,
   ): Promise<T> {
@@ -154,6 +181,10 @@ export function createClient(baseUrl = "", fetchImpl: typeof fetch = fetch): Fot
       post<Album>(`/api/v1/albums/${id(albumId)}/assets`, { asset_ids: assetIds }),
     removeFromAlbum: (albumId, assetIds) =>
       post<Album>(`/api/v1/albums/${id(albumId)}/assets/remove`, { asset_ids: assetIds }),
+    searchPlaces: (q, limit = 10) => get<Place[]>(`/api/v1/places/search${query({ q, limit })}`),
+    tagPlaces: () => get<TagPlaces>("/api/v1/places/tags"),
+    decideTagPlace: (body) => request<TagPlaces>("PUT", "/api/v1/places/tags", body),
+    mapAssets: (params = {}) => get<MapPoints>(`/api/v1/map/assets${query(params)}`),
     url: (path) => `${root}${path}`,
   };
 }

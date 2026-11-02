@@ -63,6 +63,29 @@ def test_parse_exif_datetime_without_offset_assumes_local_zone() -> None:
     assert media.parse_exif_datetime("garbage") == (None, False)
 
 
+def test_extract_reads_gps_position(tmp_path: Path) -> None:
+    path = tmp_path / "rome.jpg"
+    img = Image.new("RGB", (16, 16))
+    exif = Image.Exif()
+    gps = exif.get_ifd(0x8825)
+    gps[1] = "N"
+    gps[2] = (41.0, 53.0, 24.0)
+    gps[3] = "W"
+    gps[4] = (12.0, 29.0, 32.4)
+    img.save(path, "JPEG", exif=exif)
+    out = media.extract(path, media.kind_for(path), size_px=16)
+    assert out.latitude == pytest.approx(41.89)
+    assert out.longitude == pytest.approx(-12.492333)
+
+
+def test_iso6709_and_null_island() -> None:
+    assert media.parse_iso6709("+41.8919+012.5113+050.000/") == (41.8919, 12.5113)
+    assert media.parse_iso6709("-33.86-151.21/") == (-33.86, -151.21)
+    assert media.parse_iso6709("+00.0000+000.0000/") is None
+    assert media.parse_iso6709("nonsense") is None
+    assert not media.valid_position(91, 0)
+
+
 def _worker(client: TestClient) -> tuple[WorkerApi, WorkerSettings]:
     settings = WorkerSettings(worker_host="pc", thumbnail_px=128, batch_size=1, _env_file=None)
     return WorkerApi(client), settings

@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Plus, X } from "lucide-react";
+import { Map as MapIcon, Pencil, Plus, X } from "lucide-react";
 import type {
   Album,
   AssetDetail,
   AssetSummary,
   AssetUpdate,
+  EditableField,
   FotoMindClient,
+  Location,
 } from "@fotomind/api-client";
+import { MetadataEditor } from "./MetadataEditor";
 import { StarRating } from "./StarRating";
+import { formatCoords } from "./map";
 import {
   errorMessage,
   fileFormat,
@@ -34,6 +38,35 @@ export interface AssetInspectorProps {
   preview?: boolean;
   /** Buttons next to the title (open, close). */
   actions?: ReactNode;
+  /** Offer "Show on map" for items with a location. */
+  onShowOnMap?(location: Location): void;
+}
+
+const LOCATION_SOURCES: Record<Location["source"], string> = {
+  file: "GPS",
+  manual: "set by hand",
+  tag: "from tag",
+};
+
+function locationText(location: Location, near: string | null | undefined): string {
+  if (location.label) return location.label;
+  if (near) return `Near ${near}`;
+  return formatCoords(location.latitude, location.longitude);
+}
+
+function Edited({
+  fields,
+  field,
+}: {
+  fields: string[] | undefined;
+  field: EditableField | EditableField[];
+}) {
+  const any = (Array.isArray(field) ? field : [field]).some((f) => fields?.includes(f));
+  return any ? (
+    <span className="fm-pill fm-pill-edited" title="Changed by hand; the file says otherwise">
+      edited
+    </span>
+  ) : null;
 }
 
 type DetailState =
@@ -55,11 +88,13 @@ export function AssetInspector({
   hotkeys = false,
   preview = false,
   actions,
+  onShowOnMap,
 }: AssetInspectorProps) {
   const [loaded, setLoaded] = useState<{ id: string; state: DetailState } | null>(null);
   // Derived, so switching assets shows "loading" without resetting state inside an effect.
   const state: DetailState = loaded?.id === asset.id ? loaded.state : { kind: "loading" };
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [newTag, setNewTag] = useState("");
   const detail = state.kind === "ready" ? state.detail : null;
@@ -153,6 +188,16 @@ export function AssetInspector({
   const inAlbums = new Set((detail?.albums ?? []).map((a) => a.id));
   const otherAlbums = albums.filter((a) => !inAlbums.has(a.id));
   const tags = detail?.tags ?? asset.tags ?? [];
+  const edited = detail?.edited_fields;
+  const location = detail?.location ?? asset.location ?? null;
+  const title = detail?.title ?? asset.title;
+
+  async function saveMetadata(edit: NonNullable<AssetUpdate["metadata"]>) {
+    const id = asset.id;
+    const updated = await client.updateAsset(id, { metadata: edit });
+    setLoaded({ id, state: { kind: "ready", detail: updated } });
+    onChanged?.(updated);
+  }
 
   return (
     <div className="fm-inspector-body">
@@ -176,9 +221,38 @@ export function AssetInspector({
         {actions}
       </div>
 
+      {title && <p className="fm-inspector-title">{title}</p>}
+      {detail?.description && <p className="fm-inspector-description">{detail.description}</p>}
+
       <dl className="fm-meta">
         <dt>Taken</dt>
-        <dd>{formatDate(asset.captured_at ?? asset.sort_at)}</dd>
+        <dd>
+          {formatDate(detail?.captured_at ?? asset.captured_at ?? asset.sort_at)}
+          <Edited fields={edited} field="captured_at" />
+        </dd>
+        {location && (
+          <>
+            <dt>Location</dt>
+            <dd className="fm-location">
+              <span>{locationText(location, detail?.location_near)}</span>
+              <span className="fm-pill" title={location.tag ? `Tag “${location.tag}”` : undefined}>
+                {LOCATION_SOURCES[location.source]}
+              </span>
+              <Edited fields={edited} field="location" />
+              {onShowOnMap && (
+                <button
+                  type="button"
+                  className="fm-icon-btn fm-icon-btn-sm"
+                  aria-label="Show on map"
+                  title="Show on map"
+                  onClick={() => onShowOnMap(location)}
+                >
+                  <MapIcon aria-hidden="true" />
+                </button>
+              )}
+            </dd>
+          </>
+        )}
         {dimensions && (
           <>
             <dt>Size</dt>
@@ -203,13 +277,19 @@ export function AssetInspector({
         {camera && (
           <>
             <dt>Camera</dt>
-            <dd>{camera}</dd>
+            <dd>
+              {camera}
+              <Edited fields={edited} field={["camera_make", "camera_model"]} />
+            </dd>
           </>
         )}
         {detail?.lens_model && (
           <>
             <dt>Lens</dt>
-            <dd>{detail.lens_model}</dd>
+            <dd>
+              {detail.lens_model}
+              <Edited fields={edited} field="lens_model" />
+            </dd>
           </>
         )}
         {exposure && (
@@ -224,11 +304,32 @@ export function AssetInspector({
         </dd>
       </dl>
 
-      <StarRating
-        value={rating}
-        disabled={!detail || saving}
-        onChange={(value) => save({ rating: value })}
-      />
+      <div className="fm-inspector-rate">
+        <StarRating
+          value={rating}
+          disabled={!detail || saving}
+          onChange={(value) => save({ rating: value })}
+        />
+        <button
+          type="button"
+          className="fm-btn fm-btn-ghost"
+          disabled={!detail}
+          onClick={() => setEditing(true)}
+          title="Title, description, date, location, camera"
+        >
+          <Pencil aria-hidden="true" />
+          Edit info
+        </button>
+      </div>
+      {editing && detail && (
+        <MetadataEditor
+          client={client}
+          count={1}
+          detail={detail}
+          onSubmit={saveMetadata}
+          onClose={() => setEditing(false)}
+        />
+      )}
 
       {state.kind === "loading" && <p className="fm-muted fm-small">Loading details…</p>}
       {state.kind === "error" && (
@@ -335,8 +436,8 @@ export function AssetInspector({
               ))}
             </ul>
             <p className="fm-muted fm-small">
-              Originals stay on the PC; this is a preview. Ratings, tags and albums live in the
-              catalogue and never modify the files.
+              Originals stay on the PC; this is a preview. Ratings, tags, albums and edited info
+              live in the catalogue and never modify the files.
             </p>
           </section>
         </>

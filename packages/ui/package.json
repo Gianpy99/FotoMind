@@ -12,8 +12,14 @@
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
+    "leaflet": "^1.9.4",
     "lucide-react": "^1.66.0",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "supercluster": "^9.1.0"
+  },
+  "devDependencies": {
+    "@types/leaflet": "^1.9.22",
+    "@types/supercluster": "^7.1.3"
   }
 }

@@ -98,7 +98,7 @@
           "library"
         ],
         "summary": "List Assets",
-        "description": "Capture time (falling back to file mtime) order with keyset pagination.\n\n``q`` terms are ANDed; each matches name, camera, lens, file path or tag. ``tag`` may be\nrepeated (all must match). ``date_from``/``date_to`` are inclusive UTC days.",
+        "description": "Capture time (falling back to file mtime) order with keyset pagination.",
         "operationId": "list_assets_api_v1_assets_get",
         "parameters": [
           {
@@ -127,6 +127,20 @@
                 }
               ],
               "title": "Cursor"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "newest",
+                "oldest"
+              ],
+              "type": "string",
+              "default": "newest",
+              "title": "Sort"
             }
           },
           {
@@ -301,17 +315,19 @@
             }
           },
           {
-            "name": "sort",
+            "name": "located",
             "in": "query",
             "required": false,
             "schema": {
-              "enum": [
-                "newest",
-                "oldest"
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
               ],
-              "type": "string",
-              "default": "newest",
-              "title": "Sort"
+              "title": "Located"
             }
           }
         ],
@@ -408,7 +424,7 @@
           "library"
         ],
         "summary": "Update Asset",
-        "description": "Rate or tag one asset. Catalogue-only: original files are never modified.",
+        "description": "Rate, tag or edit one asset. Catalogue-only: original files are never modified.",
         "operationId": "update_asset_api_v1_assets__asset_id__patch",
         "parameters": [
           {
@@ -462,7 +478,7 @@
           "library"
         ],
         "summary": "Bulk Update Assets",
-        "description": "Apply a rating and/or add/remove tags across a selection.",
+        "description": "Apply a rating, add/remove tags and/or metadata edits across a selection.",
         "operationId": "bulk_update_assets_api_v1_assets_bulk_post",
         "requestBody": {
           "content": {
@@ -822,6 +838,350 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AlbumOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/places/search": {
+      "get": {
+        "tags": [
+          "places"
+        ],
+        "summary": "Search Places",
+        "description": "Cities (population \u2265 15,000) and countries whose name starts with ``q``.",
+        "operationId": "search_places_api_v1_places_search_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 25,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PlaceOut"
+                  },
+                  "title": "Response Search Places Api V1 Places Search Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/places/tags": {
+      "get": {
+        "tags": [
+          "places"
+        ],
+        "summary": "Tag Places",
+        "description": "Tags whose name matches a known place (to confirm once), and decisions already taken.",
+        "operationId": "tag_places_api_v1_places_tags_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagPlaces"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "places"
+        ],
+        "summary": "Decide Tag Place",
+        "description": "Confirm a tag as a place (its photos then appear on the map), reject it, or reset.",
+        "operationId": "decide_tag_place_api_v1_places_tags_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagPlaceDecision"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagPlaces"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/map/assets": {
+      "get": {
+        "tags": [
+          "places"
+        ],
+        "summary": "Map Assets",
+        "description": "Positions of the (filtered) assets that have one, newest first.\n\nAn asset's own position (from the file or set by hand) wins; otherwise its most\nspecific confirmed place tag. Capped at ``MAX_MAP_POINTS``.",
+        "operationId": "map_assets_api_v1_map_assets_get",
+        "parameters": [
+          {
+            "name": "asset_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/AssetType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Asset Type"
+            }
+          },
+          {
+            "name": "availability",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Availability"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Availability"
+            }
+          },
+          {
+            "name": "storage_root_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Storage Root Id"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "min_rating",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 5,
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Rating"
+            }
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tag"
+            }
+          },
+          {
+            "name": "album_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Album Id"
+            }
+          },
+          {
+            "name": "camera",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Camera"
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date From"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date To"
+            }
+          },
+          {
+            "name": "located",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Located"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MapPoints"
                 }
               }
             }
@@ -1769,6 +2129,17 @@
             "type": "string",
             "title": "Display Name"
           },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
           "sort_at": {
             "type": "string",
             "format": "date-time",
@@ -1834,6 +2205,16 @@
             "title": "Tags",
             "default": []
           },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LocationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "thumbnail_url": {
             "anyOf": [
               {
@@ -1844,6 +2225,17 @@
               }
             ],
             "title": "Thumbnail Url"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
           },
           "camera_make": {
             "anyOf": [
@@ -1897,6 +2289,31 @@
             "type": "array",
             "title": "Albums",
             "default": []
+          },
+          "edited_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Edited Fields",
+            "default": []
+          },
+          "file_values": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "File Values",
+            "default": {}
+          },
+          "location_near": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Near"
           }
         },
         "type": "object",
@@ -1966,6 +2383,17 @@
             "type": "string",
             "title": "Display Name"
           },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
           "sort_at": {
             "type": "string",
             "format": "date-time",
@@ -2031,6 +2459,16 @@
             "title": "Tags",
             "default": []
           },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LocationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "thumbnail_url": {
             "anyOf": [
               {
@@ -2095,6 +2533,16 @@
               }
             ],
             "title": "Tags"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetadataEdit"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -2165,6 +2613,16 @@
             "maxItems": 100,
             "title": "Remove Tags",
             "default": []
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetadataEdit"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -2467,6 +2925,38 @@
               }
             ],
             "title": "Lens Model"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 90.0,
+                "minimum": -90.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 180.0,
+                "minimum": -180.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
+          },
+          "extractor_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Extractor Version",
+            "default": 1
           },
           "metadata": {
             "additionalProperties": {
@@ -2802,6 +3292,11 @@
           "needs_thumbnail": {
             "type": "boolean",
             "title": "Needs Thumbnail"
+          },
+          "extractor_version": {
+            "type": "integer",
+            "title": "Extractor Version",
+            "default": 0
           }
         },
         "type": "object",
@@ -2844,6 +3339,11 @@
             "title": "Types",
             "default": []
           },
+          "located": {
+            "type": "integer",
+            "title": "Located",
+            "default": 0
+          },
           "total": {
             "type": "integer",
             "title": "Total"
@@ -2858,6 +3358,173 @@
         ],
         "title": "LibraryFacets",
         "description": "Values present in the library, for the filter bar."
+      },
+      "LocationIn": {
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Longitude"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "latitude",
+          "longitude"
+        ],
+        "title": "LocationIn"
+      },
+      "LocationOut": {
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "title": "Latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "file",
+              "manual",
+              "tag"
+            ],
+            "title": "Source"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tag"
+          }
+        },
+        "type": "object",
+        "required": [
+          "latitude",
+          "longitude",
+          "source"
+        ],
+        "title": "LocationOut",
+        "description": "Where an asset is shown on the map: its own position, or a confirmed place tag."
+      },
+      "MapPoint": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "file",
+              "manual",
+              "tag"
+            ],
+            "title": "Source"
+          },
+          "asset_type": {
+            "$ref": "#/components/schemas/AssetType"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "sort_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Sort At"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "latitude",
+          "longitude",
+          "source",
+          "asset_type",
+          "display_name",
+          "sort_at",
+          "thumbnail_url"
+        ],
+        "title": "MapPoint"
+      },
+      "MapPoints": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MapPoint"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "truncated"
+        ],
+        "title": "MapPoints"
       },
       "MediaFileOut": {
         "properties": {
@@ -2941,6 +3608,170 @@
           "ai_derivative"
         ],
         "title": "MediaFileRole"
+      },
+      "MetadataEdit": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 5000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "captured_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Captured At"
+          },
+          "shift_seconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 3162240000.0,
+                "minimum": -3162240000.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shift Seconds"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LocationIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "clear_location": {
+            "type": "boolean",
+            "title": "Clear Location",
+            "default": false
+          },
+          "camera_make": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Camera Make"
+          },
+          "camera_model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Camera Model"
+          },
+          "lens_model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lens Model"
+          },
+          "revert": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "captured_at",
+                "location",
+                "camera_make",
+                "camera_model",
+                "lens_model"
+              ]
+            },
+            "type": "array",
+            "title": "Revert",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "MetadataEdit",
+        "description": "Omitted fields are unchanged; an empty string clears a text field."
+      },
+      "PlaceOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "city",
+              "country"
+            ],
+            "title": "Kind"
+          },
+          "country_code": {
+            "type": "string",
+            "title": "Country Code"
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "label",
+          "kind",
+          "country_code",
+          "latitude",
+          "longitude"
+        ],
+        "title": "PlaceOut"
       },
       "ProgressAck": {
         "properties": {
@@ -3214,6 +4045,205 @@
           "database"
         ],
         "title": "SystemStatusResponse"
+      },
+      "TagPlaceDecision": {
+        "properties": {
+          "tag": {
+            "type": "string",
+            "title": "Tag"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "rejected",
+              "unset"
+            ],
+            "title": "Status"
+          },
+          "place": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TagPlaceIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "tag",
+          "status"
+        ],
+        "title": "TagPlaceDecision"
+      },
+      "TagPlaceIn": {
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Longitude"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "city",
+              "country",
+              "custom"
+            ],
+            "title": "Kind",
+            "default": "city"
+          }
+        },
+        "type": "object",
+        "required": [
+          "latitude",
+          "longitude",
+          "label"
+        ],
+        "title": "TagPlaceIn"
+      },
+      "TagPlaceOut": {
+        "properties": {
+          "tag": {
+            "type": "string",
+            "title": "Tag"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "rejected"
+            ],
+            "title": "Status"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tag",
+          "count",
+          "status"
+        ],
+        "title": "TagPlaceOut"
+      },
+      "TagPlaceSuggestion": {
+        "properties": {
+          "tag": {
+            "type": "string",
+            "title": "Tag"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/PlaceOut"
+            },
+            "type": "array",
+            "title": "Candidates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tag",
+          "count",
+          "candidates"
+        ],
+        "title": "TagPlaceSuggestion"
+      },
+      "TagPlaces": {
+        "properties": {
+          "suggestions": {
+            "items": {
+              "$ref": "#/components/schemas/TagPlaceSuggestion"
+            },
+            "type": "array",
+            "title": "Suggestions"
+          },
+          "decided": {
+            "items": {
+              "$ref": "#/components/schemas/TagPlaceOut"
+            },
+            "type": "array",
+            "title": "Decided"
+          },
+          "attribution": {
+            "type": "string",
+            "title": "Attribution",
+            "default": "Place names \u00a9 GeoNames (CC BY 4.0)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "suggestions",
+          "decided"
+        ],
+        "title": "TagPlaces",
+        "description": "Tags that look like places (awaiting a decision) and the decisions taken."
       },
       "ThumbnailStored": {
         "properties": {

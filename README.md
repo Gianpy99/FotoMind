@@ -69,3 +69,14 @@ npm run typecheck ; npm run lint ; npm test ; npm run build
 ```
 
 After changing API routes, regenerate the client: `.\scripts\generate-api.ps1`.
+
+## Map and place data
+
+- Map tiles come from OpenStreetMap's public tile servers (© OpenStreetMap contributors, shown on
+  every map). Only tile images are fetched by the browser; no photo data leaves the library.
+- Place names are resolved offline from a GeoNames extract (CC BY 4.0) committed at
+  `backend/fotomind/modules/places/data/places.tsv.gz` (cities with 15,000+ people plus countries).
+  Rebuild it with `.\.venv\Scripts\python scripts\build_gazetteer.py`.
+- A photo's position is, in order: one set by hand ("Edit info"), the file's GPS, then a tag the
+  family confirmed as a place on the Map page. Edits live in the catalogue only; originals are never
+  written to.

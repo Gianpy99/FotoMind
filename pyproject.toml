@@ -23,6 +23,9 @@ dependencies = { file = ["requirements.txt"] }
 where = ["backend"]
 include = ["fotomind*"]
 
+[tool.setuptools.package-data]
+"fotomind.modules.places" = ["data/*.tsv.gz"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [

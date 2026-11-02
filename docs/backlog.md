@@ -49,7 +49,8 @@ Topology differences from the PRD are covered in [ADR-0001](adr/0001-hybrid-depl
 - ✅ 3.6 SHA-256 per file
 - 🟡 3.7 Duplicates: identical content shares one asset and moves are tracked; RAW+JPEG pairing todo
 - ✅ 3.8 EXIF (capture time, camera, lens, exposure, dimensions, orientation; video duration, codec,
-  bitrate, audio, creation time; VID-002/005)
+  bitrate, audio, creation time; VID-002/005), GPS position from photos (EXIF GPS IFD) and videos
+  (ISO 6709 tags); files read by an older extractor are re-read on the next scan
 - 🟡 3.9 Thumbnails (512 px JPEG uploaded to the Pi data volume); larger previews todo
 - ✅ 3.10 Missing-file detection (unseen files → `missing`; offline root → `offline`)
 
@@ -68,11 +69,17 @@ Topology differences from the PRD are covered in [ADR-0001](adr/0001-hybrid-depl
 - ✅ 4.10 App shell per [design system v1.0](product/FotoMind_Design_System_v1.0.md): workspace
   tabs, sidebar, docked inspector, status bar, month-grouped grid, density slider, dark/light theme,
   responsive down to a bottom-sheet inspector
+- ✅ 4.11 Map (OpenStreetMap tiles, clustered thumbnails, "in this area" strip, honours search):
+  positions from file GPS, set by hand, or from tags confirmed as places (offline GeoNames gazetteer;
+  suggestions need a one-time confirm because many words are also town names)
+- ✅ 4.12 Edit info, single and bulk (LIB-007/008): title, description, date set or shift (camera
+  clock fix), location set/remove, camera/lens; catalogue-only, survives rescans, "edited" marks and
+  per-field restore from the file
 
 ## EPIC 5: Search
 
-✅ 5.1 Metadata query API (`/assets?q=…` + facets) · 🟡 5.2 Full-text/trigram (ILIKE over name, camera,
-lens, path, tags with `pg_trgm` indexes; ranking todo) · ⬜ 5.3 Embedding benchmark · 5.4 Embedding worker ·
+✅ 5.1 Metadata query API (`/assets?q=…` + facets) · 🟡 5.2 Full-text/trigram (ILIKE over name, title,
+description, place, camera, lens, path, tags with `pg_trgm` indexes; ranking todo) · ⬜ 5.3 Embedding benchmark · 5.4 Embedding worker ·
 5.5 Vector storage/search · 5.6 Semantic search UI · 5.7 Reindex strategy
 
 ## EPIC 6: RAW and conventional development

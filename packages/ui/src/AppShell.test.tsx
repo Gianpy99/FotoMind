@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Album, AssetSummary, FotoMindClient, Job, StorageRoot } from "@fotomind/api-client";
+import type {
+  Album,
+  AssetSummary,
+  FotoMindClient,
+  Job,
+  Place,
+  StorageRoot,
+} from "@fotomind/api-client";
 import { AppShell } from "./AppShell";
 
 function asset(n: number, extra: Partial<AssetSummary> = {}): AssetSummary {
@@ -18,6 +25,8 @@ function asset(n: number, extra: Partial<AssetSummary> = {}): AssetSummary {
     availability: "online",
     tags: [],
     thumbnail_url: `/api/v1/assets/a${n}/thumbnail?v=abc`,
+    title: null,
+    location: null,
     ...extra,
   };
 }
@@ -67,6 +76,15 @@ const queuedJob: Job = {
   finished_at: null,
 };
 
+const rome: Place = {
+  name: "Rome",
+  label: "Rome, Italy",
+  kind: "city",
+  country_code: "IT",
+  latitude: 41.89,
+  longitude: 12.48,
+};
+
 function makeClient(overrides: Partial<FotoMindClient> = {}): FotoMindClient {
   return {
     health: async () => ({ status: "ok", version: "0.1.0" }),
@@ -87,6 +105,10 @@ function makeClient(overrides: Partial<FotoMindClient> = {}): FotoMindClient {
       camera_make: "Canon",
       camera_model: "EOS R6",
       lens_model: null,
+      description: null,
+      edited_fields: [],
+      file_values: {},
+      location_near: null,
       metadata: { f_number: 2.8, exposure_time: "1/250", iso: 400 },
       tags: ["family"],
       albums: [],
@@ -121,6 +143,43 @@ function makeClient(overrides: Partial<FotoMindClient> = {}): FotoMindClient {
         { value: "video", count: 1 },
       ],
       total: 2,
+      located: 1,
+    }),
+    searchPlaces: async () => [rome],
+    tagPlaces: async () => ({
+      suggestions: [{ tag: "rome", count: 3, candidates: [rome] }],
+      decided: [],
+      attribution: "Place names © GeoNames (CC BY 4.0)",
+    }),
+    decideTagPlace: async (body) => ({
+      suggestions: [],
+      decided: [
+        {
+          tag: body.tag,
+          count: 3,
+          status: "confirmed",
+          label: rome.label,
+          kind: "city",
+          latitude: rome.latitude,
+          longitude: rome.longitude,
+        },
+      ],
+      attribution: "Place names © GeoNames (CC BY 4.0)",
+    }),
+    mapAssets: async () => ({
+      items: [
+        {
+          id: "a1",
+          asset_type: "photo",
+          display_name: "IMG_1.jpg",
+          thumbnail_url: "/api/v1/assets/a1/thumbnail?v=abc",
+          sort_at: "2024-07-14T16:30:00Z",
+          latitude: 41.89,
+          longitude: 12.48,
+          source: "file",
+        },
+      ],
+      truncated: false,
     }),
     updateAsset: async (id, body) => ({
       ...(await makeClient().getAsset(id)),
@@ -288,6 +347,90 @@ describe("AppShell", () => {
     expect(createAlbum).toHaveBeenCalledWith({ name: "Summer", asset_ids: ["a1", "a2"] });
     expect(await screen.findByText(/Created album “Summer”/)).toBeTruthy();
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("edits info on a selection: shifts the date and sets a place", async () => {
+    const bulkUpdateAssets = vi.fn(makeClient().bulkUpdateAssets);
+    render(<AppShell client={makeClient({ bulkUpdateAssets })} surface="web" />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Select IMG_1.jpg" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select IMG_2.jpg" }));
+    fireEvent.click(screen.getByRole("button", { name: /Edit info/ }));
+    const dialog = screen.getByRole("dialog", { name: "Edit info" });
+
+    // Nothing ticked yet: the editor refuses to submit.
+    fireEvent.click(within(dialog).getByRole("button", { name: "Apply to 2 items" }));
+    expect(await within(dialog).findByText("Tick at least one thing to change.")).toBeTruthy();
+
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Date taken" }));
+    fireEvent.change(within(dialog).getByRole("spinbutton", { name: "Shift hours" }), {
+      target: { value: "2" },
+    });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Shift direction" }), {
+      target: { value: "-1" },
+    });
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Location" }));
+    fireEvent.change(within(dialog).getByRole("searchbox", { name: "Search places" }), {
+      target: { value: "Rome" },
+    });
+    fireEvent.click(await within(dialog).findByRole("button", { name: /Rome, Italy/ }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Apply to 2 items" }));
+
+    await waitFor(() =>
+      expect(bulkUpdateAssets).toHaveBeenCalledWith({
+        asset_ids: ["a1", "a2"],
+        metadata: {
+          shift_seconds: -7200,
+          location: { latitude: 41.89, longitude: 12.48, label: "Rome, Italy" },
+        },
+      }),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("shows the location in the inspector and opens the map from it", async () => {
+    const located = makeClient();
+    const getAsset: FotoMindClient["getAsset"] = async (id) => ({
+      ...(await located.getAsset(id)),
+      location: { latitude: 41.89, longitude: 12.48, source: "file", label: null, tag: null },
+      location_near: "Rome, Italy",
+      edited_fields: ["captured_at"],
+    });
+    render(<AppShell client={makeClient({ getAsset })} surface="web" />);
+    fireEvent.click(await screen.findByTitle("IMG_1.jpg"));
+    const inspector = await screen.findByRole("complementary", { name: "Details" });
+    expect(await within(inspector).findByText(/Near Rome, Italy/)).toBeTruthy();
+    expect(within(inspector).getByText("GPS")).toBeTruthy();
+    expect(within(inspector).getAllByText("edited").length).toBe(1);
+    fireEvent.click(within(inspector).getByRole("button", { name: "Show on map" }));
+    expect(await screen.findByRole("heading", { name: "Map" })).toBeTruthy();
+  });
+
+  it("shows the map and confirms a place suggested from a tag", async () => {
+    const decideTagPlace = vi.fn(makeClient().decideTagPlace);
+    const mapAssets = vi.fn(makeClient().mapAssets);
+    render(<AppShell client={makeClient({ decideTagPlace, mapAssets })} surface="web" />);
+    fireEvent.click(await screen.findByRole("button", { name: /^Map/ }));
+    expect(await screen.findByRole("heading", { name: "Map" })).toBeTruthy();
+    expect(screen.getByRole("application", { name: "Photo map" })).toBeTruthy();
+    await waitFor(() => expect(mapAssets).toHaveBeenCalled());
+
+    const suggestions = await screen.findByRole("list", { name: "Suggested places" });
+    expect(within(suggestions).getByText("Rome, Italy")).toBeTruthy();
+    fireEvent.click(within(suggestions).getByRole("button", { name: "Confirm rome as a place" }));
+    await waitFor(() =>
+      expect(decideTagPlace).toHaveBeenCalledWith({
+        tag: "rome",
+        status: "confirmed",
+        place: {
+          label: "Rome, Italy",
+          kind: "city",
+          latitude: 41.89,
+          longitude: 12.48,
+        },
+      }),
+    );
+    const confirmed = await screen.findByRole("list", { name: "Confirmed places" });
+    expect(within(confirmed).getByText("rome")).toBeTruthy();
   });
 
   it("lists albums and opens one", async () => {

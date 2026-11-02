@@ -52,6 +52,7 @@ class KnownFile(BaseModel):
     size_bytes: int
     mtime: datetime
     needs_thumbnail: bool
+    extractor_version: int = 0
 
 
 class ClaimRequest(BaseModel):
@@ -148,13 +149,16 @@ def known_files(root_id: uuid.UUID, db: DbDep, _worker: WorkerDep) -> list[Known
             MediaFile.size_bytes,
             MediaFile.mtime,
             MediaAsset.thumbnail_sha256,
+            MediaAsset.extractor_version,
         )
         .join(MediaAsset, MediaAsset.id == MediaFile.asset_id)
         .where(MediaFile.storage_root_id == root_id)
     )
     return [
-        KnownFile(relative_path=p, size_bytes=s, mtime=m, needs_thumbnail=t is None)
-        for p, s, m, t in rows
+        KnownFile(
+            relative_path=p, size_bytes=s, mtime=m, needs_thumbnail=t is None, extractor_version=v
+        )
+        for p, s, m, t, v in rows
     ]
 
 

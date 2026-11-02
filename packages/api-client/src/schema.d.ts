@@ -91,9 +91,6 @@ export interface paths {
         /**
          * List Assets
          * @description Capture time (falling back to file mtime) order with keyset pagination.
-         *
-         *     ``q`` terms are ANDed; each matches name, camera, lens, file path or tag. ``tag`` may be
-         *     repeated (all must match). ``date_from``/``date_to`` are inclusive UTC days.
          */
         get: operations["list_assets_api_v1_assets_get"];
         put?: never;
@@ -140,7 +137,7 @@ export interface paths {
         head?: never;
         /**
          * Update Asset
-         * @description Rate or tag one asset. Catalogue-only: original files are never modified.
+         * @description Rate, tag or edit one asset. Catalogue-only: original files are never modified.
          */
         patch: operations["update_asset_api_v1_assets__asset_id__patch"];
         trace?: never;
@@ -156,7 +153,7 @@ export interface paths {
         put?: never;
         /**
          * Bulk Update Assets
-         * @description Apply a rating and/or add/remove tags across a selection.
+         * @description Apply a rating, add/remove tags and/or metadata edits across a selection.
          */
         post: operations["bulk_update_assets_api_v1_assets_bulk_post"];
         delete?: never;
@@ -250,6 +247,73 @@ export interface paths {
         put?: never;
         /** Remove Album Assets */
         post: operations["remove_album_assets_api_v1_albums__album_id__assets_remove_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/places/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Places
+         * @description Cities (population ≥ 15,000) and countries whose name starts with ``q``.
+         */
+        get: operations["search_places_api_v1_places_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/places/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tag Places
+         * @description Tags whose name matches a known place (to confirm once), and decisions already taken.
+         */
+        get: operations["tag_places_api_v1_places_tags_get"];
+        /**
+         * Decide Tag Place
+         * @description Confirm a tag as a place (its photos then appear on the map), reject it, or reset.
+         */
+        put: operations["decide_tag_place_api_v1_places_tags_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/map/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Map Assets
+         * @description Positions of the (filtered) assets that have one, newest first.
+         *
+         *     An asset's own position (from the file or set by hand) wins; otherwise its most
+         *     specific confirmed place tag. Capped at ``MAX_MAP_POINTS``.
+         */
+        get: operations["map_assets_api_v1_map_assets_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -590,6 +654,8 @@ export interface components {
             asset_type: components["schemas"]["AssetType"];
             /** Display Name */
             display_name: string;
+            /** Title */
+            title?: string | null;
             /**
              * Sort At
              * Format: date-time
@@ -611,8 +677,11 @@ export interface components {
              * @default []
              */
             tags: string[];
+            location?: components["schemas"]["LocationOut"] | null;
             /** Thumbnail Url */
             thumbnail_url?: string | null;
+            /** Description */
+            description?: string | null;
             /** Camera Make */
             camera_make: string | null;
             /** Camera Model */
@@ -630,6 +699,20 @@ export interface components {
              * @default []
              */
             albums: components["schemas"]["AlbumRef"][];
+            /**
+             * Edited Fields
+             * @default []
+             */
+            edited_fields: string[];
+            /**
+             * File Values
+             * @default {}
+             */
+            file_values: {
+                [key: string]: unknown;
+            };
+            /** Location Near */
+            location_near?: string | null;
         };
         /** AssetPage */
         AssetPage: {
@@ -650,6 +733,8 @@ export interface components {
             asset_type: components["schemas"]["AssetType"];
             /** Display Name */
             display_name: string;
+            /** Title */
+            title?: string | null;
             /**
              * Sort At
              * Format: date-time
@@ -671,6 +756,7 @@ export interface components {
              * @default []
              */
             tags: string[];
+            location?: components["schemas"]["LocationOut"] | null;
             /** Thumbnail Url */
             thumbnail_url?: string | null;
         };
@@ -688,6 +774,7 @@ export interface components {
             rating?: number | null;
             /** Tags */
             tags?: string[] | null;
+            metadata?: components["schemas"]["MetadataEdit"] | null;
         };
         /**
          * Availability
@@ -717,6 +804,7 @@ export interface components {
              * @default []
              */
             remove_tags: string[];
+            metadata?: components["schemas"]["MetadataEdit"] | null;
         };
         /** BulkResult */
         BulkResult: {
@@ -813,6 +901,15 @@ export interface components {
             camera_model?: string | null;
             /** Lens Model */
             lens_model?: string | null;
+            /** Latitude */
+            latitude?: number | null;
+            /** Longitude */
+            longitude?: number | null;
+            /**
+             * Extractor Version
+             * @default 1
+             */
+            extractor_version: number;
             /** Metadata */
             metadata?: {
                 [key: string]: string | number | boolean | null;
@@ -921,6 +1018,11 @@ export interface components {
             mtime: string;
             /** Needs Thumbnail */
             needs_thumbnail: boolean;
+            /**
+             * Extractor Version
+             * @default 0
+             */
+            extractor_version: number;
         };
         /**
          * LibraryFacets
@@ -938,8 +1040,75 @@ export interface components {
              * @default []
              */
             types: components["schemas"]["FacetValue"][];
+            /**
+             * Located
+             * @default 0
+             */
+            located: number;
             /** Total */
             total: number;
+        };
+        /** LocationIn */
+        LocationIn: {
+            /** Latitude */
+            latitude: number;
+            /** Longitude */
+            longitude: number;
+            /** Label */
+            label?: string | null;
+        };
+        /**
+         * LocationOut
+         * @description Where an asset is shown on the map: its own position, or a confirmed place tag.
+         */
+        LocationOut: {
+            /** Latitude */
+            latitude: number;
+            /** Longitude */
+            longitude: number;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "file" | "manual" | "tag";
+            /** Label */
+            label?: string | null;
+            /** Tag */
+            tag?: string | null;
+        };
+        /** MapPoint */
+        MapPoint: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Latitude */
+            latitude: number;
+            /** Longitude */
+            longitude: number;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "file" | "manual" | "tag";
+            asset_type: components["schemas"]["AssetType"];
+            /** Display Name */
+            display_name: string;
+            /**
+             * Sort At
+             * Format: date-time
+             */
+            sort_at: string;
+            /** Thumbnail Url */
+            thumbnail_url: string | null;
+        };
+        /** MapPoints */
+        MapPoints: {
+            /** Items */
+            items: components["schemas"]["MapPoint"][];
+            /** Truncated */
+            truncated: boolean;
         };
         /** MediaFileOut */
         MediaFileOut: {
@@ -982,6 +1151,55 @@ export interface components {
          * @enum {string}
          */
         MediaFileRole: "original" | "raw_original" | "jpeg_sidecar" | "thumbnail" | "preview" | "poster_frame" | "edited_export" | "ai_derivative";
+        /**
+         * MetadataEdit
+         * @description Omitted fields are unchanged; an empty string clears a text field.
+         */
+        MetadataEdit: {
+            /** Title */
+            title?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Captured At */
+            captured_at?: string | null;
+            /** Shift Seconds */
+            shift_seconds?: number | null;
+            location?: components["schemas"]["LocationIn"] | null;
+            /**
+             * Clear Location
+             * @default false
+             */
+            clear_location: boolean;
+            /** Camera Make */
+            camera_make?: string | null;
+            /** Camera Model */
+            camera_model?: string | null;
+            /** Lens Model */
+            lens_model?: string | null;
+            /**
+             * Revert
+             * @default []
+             */
+            revert: ("captured_at" | "location" | "camera_make" | "camera_model" | "lens_model")[];
+        };
+        /** PlaceOut */
+        PlaceOut: {
+            /** Name */
+            name: string;
+            /** Label */
+            label: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "city" | "country";
+            /** Country Code */
+            country_code: string;
+            /** Latitude */
+            latitude: number;
+            /** Longitude */
+            longitude: number;
+        };
         /** ProgressAck */
         ProgressAck: {
             /** Cancel Requested */
@@ -1080,6 +1298,76 @@ export interface components {
             /** Environment */
             environment: string;
             database: components["schemas"]["DatabaseHealth"];
+        };
+        /** TagPlaceDecision */
+        TagPlaceDecision: {
+            /** Tag */
+            tag: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "confirmed" | "rejected" | "unset";
+            place?: components["schemas"]["TagPlaceIn"] | null;
+        };
+        /** TagPlaceIn */
+        TagPlaceIn: {
+            /** Latitude */
+            latitude: number;
+            /** Longitude */
+            longitude: number;
+            /** Label */
+            label: string;
+            /**
+             * Kind
+             * @default city
+             * @enum {string}
+             */
+            kind: "city" | "country" | "custom";
+        };
+        /** TagPlaceOut */
+        TagPlaceOut: {
+            /** Tag */
+            tag: string;
+            /** Count */
+            count: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "confirmed" | "rejected";
+            /** Label */
+            label?: string | null;
+            /** Kind */
+            kind?: string | null;
+            /** Latitude */
+            latitude?: number | null;
+            /** Longitude */
+            longitude?: number | null;
+        };
+        /** TagPlaceSuggestion */
+        TagPlaceSuggestion: {
+            /** Tag */
+            tag: string;
+            /** Count */
+            count: number;
+            /** Candidates */
+            candidates: components["schemas"]["PlaceOut"][];
+        };
+        /**
+         * TagPlaces
+         * @description Tags that look like places (awaiting a decision) and the decisions taken.
+         */
+        TagPlaces: {
+            /** Suggestions */
+            suggestions: components["schemas"]["TagPlaceSuggestion"][];
+            /** Decided */
+            decided: components["schemas"]["TagPlaceOut"][];
+            /**
+             * Attribution
+             * @default Place names © GeoNames (CC BY 4.0)
+             */
+            attribution: string;
         };
         /** ThumbnailStored */
         ThumbnailStored: {
@@ -1193,6 +1481,7 @@ export interface operations {
             query?: {
                 limit?: number;
                 cursor?: string | null;
+                sort?: "newest" | "oldest";
                 asset_type?: components["schemas"]["AssetType"] | null;
                 availability?: components["schemas"]["Availability"] | null;
                 storage_root_id?: string | null;
@@ -1203,7 +1492,7 @@ export interface operations {
                 camera?: string | null;
                 date_from?: string | null;
                 date_to?: string | null;
-                sort?: "newest" | "oldest";
+                located?: boolean | null;
             };
             header?: never;
             path?: never;
@@ -1593,6 +1882,132 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AlbumOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_places_api_v1_places_search_get: {
+        parameters: {
+            query: {
+                q: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaceOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tag_places_api_v1_places_tags_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagPlaces"];
+                };
+            };
+        };
+    };
+    decide_tag_place_api_v1_places_tags_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TagPlaceDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagPlaces"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    map_assets_api_v1_map_assets_get: {
+        parameters: {
+            query?: {
+                asset_type?: components["schemas"]["AssetType"] | null;
+                availability?: components["schemas"]["Availability"] | null;
+                storage_root_id?: string | null;
+                q?: string | null;
+                min_rating?: number | null;
+                tag?: string[] | null;
+                album_id?: string | null;
+                camera?: string | null;
+                date_from?: string | null;
+                date_to?: string | null;
+                located?: boolean | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapPoints"];
                 };
             };
             /** @description Validation Error */

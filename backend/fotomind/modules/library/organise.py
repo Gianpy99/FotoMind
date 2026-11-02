@@ -103,7 +103,12 @@ def remove_from_album(session: Session, album: Album, asset_ids: Iterable[uuid.U
 
 
 def delete_unused_tags(session: Session) -> None:
-    """Tags are only a vocabulary of what is in use; drop ones no asset carries any more."""
+    """Tags are only a vocabulary of what is in use; drop ones no asset carries any more.
+
+    Tags with a place decision are kept so the decision survives re-tagging.
+    """
     session.execute(
-        Tag.__table__.delete().where(~Tag.id.in_(select(asset_tag.c.tag_id).distinct()))
+        Tag.__table__.delete().where(
+            ~Tag.id.in_(select(asset_tag.c.tag_id).distinct()), Tag.place_status.is_(None)
+        )
     )
