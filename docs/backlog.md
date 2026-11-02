@@ -8,7 +8,7 @@ Topology differences from the PRD are covered in [ADR-0001](adr/0001-hybrid-depl
 - ⬜ 0.1 Confirm Windows host CPU/GPU/RAM and NVMe cache space
 - 🟡 0.2 Record versions (dev: Python 3.13, Node 22, Docker 28; Pi: Debian 12 aarch64)
 - ✅ 0.3 Inspect the Pi: Debian 12, PostgreSQL 15 native on **5432**, 8 GB RAM, NVMe
-- ⬜ 0.4 Validate DB access from the container (`pg_hba` for the Docker subnet) and the firewall
+- ✅ 0.4 Validate DB access from the container (`pg_hba` for the Docker subnet) and the firewall
 - ✅ 0.5 ADRs for deployment and job execution (ADR-0001 … 0007)
 
 ## EPIC 1: Repository and vertical slice
@@ -25,26 +25,39 @@ Topology differences from the PRD are covered in [ADR-0001](adr/0001-hybrid-depl
 
 ## EPIC 2: Database foundation
 
-- ⬜ 2.1 Dedicated `fotomind` DB/user on the Pi ([script](../deployment/raspberry-pi/create-database.sql)) +
+- ✅ 2.1 Dedicated `fotomind` DB/user on the Pi ([script](../deployment/raspberry-pi/create-database.sql)) +
   dev/test DBs for the `fotomind_dev` role ([script](../deployment/raspberry-pi/create-dev-databases.sql))
-- ⬜ 2.2 Network policy (`pg_hba`, LAN only)
-- ⬜ 2.3 SQLAlchemy models (storage_root, media_asset, media_file, job, …; ADR-0002)
+- ✅ 2.2 Network policy (`pg_hba`, LAN only)
+- ✅ 2.3 SQLAlchemy models + migration `0002_catalog` (storage_root, media_asset, media_file, job; ADR-0002)
 - ✅ 2.4 Alembic baseline (`pg_trgm`)
 - ✅ 2.5 Health/readiness checks
 - ⬜ 2.6 pgvector spike (ADR-0006)
 - ⬜ 2.7 Dump/restore rehearsal ([runbook](operations/database-backup-restore.md))
-- ⬜ Worker authentication (token) + `/api/v1/worker/*` endpoints
+- ✅ Worker authentication (portal login + `X-FotoMind-Worker-Token`) + `/api/v1/worker/*` endpoints
 
 ## EPIC 3: Storage and import
 
-⬜ 3.1 Storage-root registration · 3.2 Volume identity · 3.3 Path normalisation/security ·
-3.4 Scanner · 3.5 Restartable import jobs · 3.6 SHA-256 · 3.7 Duplicates · 3.8 EXIF ·
-3.9 Thumbnails/previews (uploaded to the Pi) · 3.10 Missing-volume detection
+- ✅ 3.1 Storage-root registration (`fotomind-worker roots add`)
+- ✅ 3.2 Volume identity (Windows volume serial)
+- ✅ 3.3 Path normalisation/security (relative POSIX paths, no `..`/drives)
+- ✅ 3.4 Scanner (JPEG, PNG, CR2/CR3, ARW, MP4/MOV; incremental by size+mtime)
+- ✅ 3.5 Restartable import jobs (queue, claim with `SKIP LOCKED`, heartbeat, stale reclaim, cancel)
+- ✅ 3.6 SHA-256 per file
+- 🟡 3.7 Duplicates: identical content shares one asset and moves are tracked; RAW+JPEG pairing todo
+- ✅ 3.8 EXIF (capture time, camera, lens, dimensions, orientation; video duration/creation time)
+- 🟡 3.9 Thumbnails (512 px JPEG uploaded to the Pi data volume); larger previews todo
+- ✅ 3.10 Missing-file detection (unseen files → `missing`; offline root → `offline`)
 
 ## EPIC 4: Library UX
 
-⬜ 4.1 Grid · 4.2 Viewer · 4.3 Metadata panel · 4.4 Filters/sort/pagination · 4.5 Ratings/tags ·
-4.6 Albums · 4.7 Job progress UI · 4.8 LAN/remote web access · 4.9 Keyboard navigation
+- ✅ 4.1 Grid
+- 🟡 4.2 Viewer (thumbnail only; full resolution needs the PC)
+- ✅ 4.3 Metadata panel
+- 🟡 4.4 Filters/sort/pagination (type filter, newest first, cursor paging)
+- ⬜ 4.5 Ratings/tags · ⬜ 4.6 Albums
+- ✅ 4.7 Job progress UI (Sources & jobs)
+- ✅ 4.8 LAN/remote web access (photos.borrellofamily.co.uk via the portal)
+- ✅ 4.9 Keyboard navigation (←/→/Esc in the viewer)
 
 ## EPIC 5: Search
 

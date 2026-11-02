@@ -1,6 +1,6 @@
 # ADR-0002: Storage model
 
-- Status: Accepted (schema lands in EPIC 2)
+- Status: Accepted (implemented in migration `0002_catalog`)
 - Date: 2026-11-02
 
 ## Context
@@ -29,4 +29,15 @@ media asset that covers both photos and videos.
 
 - Moving or renaming files only updates `media_file` rows when the hashes match.
 - Offline disks don't delete anything. Assets are marked `Availability.offline`.
-- The baseline migration only enables `pg_trgm`, and the tables above arrive in EPIC 2.
+- `0001_baseline` enables `pg_trgm`; `0002_catalog` adds `storage_root`, `media_asset`,
+  `media_file` and `job`.
+
+## Implementation notes (first slice)
+
+- Originals never leave the PC. The worker uploads only metadata and a 512 px JPEG
+  thumbnail, stored on the Pi data volume as `thumbnails/<2 hex>/<asset id>.jpg` and served
+  with immutable cache headers (URL versioned by the thumbnail hash).
+- Files with identical SHA-256 share one asset. RAW+JPEG pairing is not done yet, so a
+  pair currently shows as two assets.
+- A file not seen by a successful full scan becomes `missing`; an unreachable root becomes
+  `offline`. Assets take the best availability of their files.

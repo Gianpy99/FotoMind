@@ -58,3 +58,7 @@ class ReviewStatus(StrEnum):
 class ProcessingLocation(StrEnum):
     LOCAL = "local"
     CLOUD = "cloud"
+
+
+class JobType(StrEnum):
+    SCAN_ROOT = "scan_root"

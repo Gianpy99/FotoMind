@@ -1,3 +1,5 @@
 -r requirements.txt
 pytest>=8
 ruff>=0.6
+# JPEG/PNG thumbnail tests for the worker (RAW/video tests skip without rawpy/av).
+pillow>=11

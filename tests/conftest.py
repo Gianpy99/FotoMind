@@ -34,3 +34,27 @@ def app_factory(tmp_path: Path):
 def client(app_factory) -> TestClient:
     with TestClient(app_factory()) as c:
         yield c
+
+
+@pytest.fixture
+def db_app_factory(tmp_path: Path):
+    """App backed by a throwaway SQLite catalogue (schema from the ORM models)."""
+    from fotomind.infrastructure.db.base import Base
+    from fotomind.infrastructure.db.models import Job  # noqa: F401  (registers tables)
+    from fotomind.infrastructure.db.session import get_engine
+
+    def _make(**overrides: object) -> FastAPI:
+        overrides.setdefault("data_dir", tmp_path / "data")
+        overrides.setdefault("database_url", f"sqlite:///{(tmp_path / 'catalog.db').as_posix()}")
+        overrides.setdefault("run_migrations_on_startup", False)
+        settings = make_settings(**overrides)
+        Base.metadata.create_all(get_engine(settings))
+        return create_app(settings)
+
+    return _make
+
+
+@pytest.fixture
+def db_client(db_app_factory) -> TestClient:
+    with TestClient(db_app_factory()) as c:
+        yield c

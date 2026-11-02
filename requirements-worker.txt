@@ -1,0 +1,6 @@
+# Windows PC worker only (scan, hashing, EXIF, thumbnails). Not installed in the Pi image.
+-r requirements.txt
+pillow>=11
+rawpy>=0.24
+exifread>=3.0
+av>=14

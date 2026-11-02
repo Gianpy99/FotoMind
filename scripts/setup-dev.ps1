@@ -12,7 +12,7 @@ if (-not (Test-Path ".venv")) {
 }
 Write-Host "==> Installing backend dependencies" -ForegroundColor Cyan
 & .\.venv\Scripts\python.exe -m pip install --upgrade pip
-& .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt -e .
+& .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt -r requirements-worker.txt -e .
 if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
 
 Write-Host "==> Installing npm workspaces" -ForegroundColor Cyan

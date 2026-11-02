@@ -9,6 +9,9 @@ from fotomind.config import Settings
 
 @lru_cache(maxsize=4)
 def _engine_for(url: str, connect_timeout_s: int) -> Engine:
+    if url.startswith("sqlite"):
+        # Unit tests only; the API threadpool shares the connection pool.
+        return create_engine(url, connect_args={"check_same_thread": False})
     return create_engine(
         url,
         pool_pre_ping=True,

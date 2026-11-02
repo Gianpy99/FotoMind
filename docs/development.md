@@ -30,6 +30,15 @@ npm run dev:desktop              # Tauri window (needs Rust)
 .\.venv\Scripts\fotomind-worker ping
 ```
 
+Try the full flow against the local API (dev DB on the Pi; thumbnails go to `.data\thumbnails`):
+
+```powershell
+.\.venv\Scripts\fotomind-worker roots add "C:\path\to\some\photos" --label Test
+.\.venv\Scripts\fotomind-worker scan     # then open http://localhost:5173
+```
+
+See [deployment/windows/README.md](../deployment/windows/README.md) for all worker commands.
+
 Locally you are the `DEV_USER` (default `dev`). To simulate the portal, send
 `Remote-User: alice` and `Remote-Groups: family,admins`.
 

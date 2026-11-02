@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     # Persistent data (thumbnails/previews cache, manifests). /app/data in the container.
     data_dir: Path = Path("./.data")
 
+    # Shared secret the PC worker sends as X-FotoMind-Worker-Token, on top of portal auth.
+    # Required in production (worker endpoints are disabled without it); optional elsewhere.
+    worker_token: SecretStr | None = None
+    # A worker holding a job longer than this without a heartbeat loses it to the next claim.
+    job_stale_after_s: int = 900
+    thumbnail_max_bytes: int = 2 * 1024 * 1024
+
     # Local stand-in for the portal Remote-User header; ignored when APP_ENV=production.
     dev_user: str | None = "dev"
 
@@ -51,11 +58,22 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         return self.app_env == "production"
 
+    @property
+    def thumbnails_dir(self) -> Path:
+        return self.data_dir / "thumbnails"
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_csv(cls, value: object) -> object:
         if isinstance(value, str):
             return [v.strip() for v in value.split(",") if v.strip()]
+        return value
+
+    @field_validator("worker_token", mode="before")
+    @classmethod
+    def _blank_token_is_none(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
         return value
 
     @field_validator("database_url", mode="before")

@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import type { CurrentUser, FotoMindClient, SystemStatus } from "@fotomind/api-client";
+import type { CurrentUser, FotoMindClient } from "@fotomind/api-client";
+import { LibraryView } from "./LibraryView";
+import { SourcesView } from "./SourcesView";
+import { errorMessage } from "./format";
 
 export interface AppShellProps {
   client: FotoMindClient;
@@ -7,27 +10,32 @@ export interface AppShellProps {
   surface: string;
 }
 
-const SECTIONS = ["Library", "Search", "Albums", "People", "Jobs", "Backup"] as const;
+type Section = "library" | "sources";
 
-type LoadState =
-  | { kind: "loading" }
-  | { kind: "ready"; user: CurrentUser; status: SystemStatus }
-  | { kind: "error"; message: string };
+const SECTIONS: { id: Section | null; label: string }[] = [
+  { id: "library", label: "Library" },
+  { id: null, label: "Search" },
+  { id: null, label: "Albums" },
+  { id: null, label: "People" },
+  { id: "sources", label: "Sources & jobs" },
+  { id: null, label: "Backup" },
+];
+
+type UserState =
+  { kind: "loading" } | { kind: "ready"; user: CurrentUser } | { kind: "error"; message: string };
 
 export function AppShell({ client, surface }: AppShellProps) {
-  const [state, setState] = useState<LoadState>({ kind: "loading" });
+  const [userState, setUserState] = useState<UserState>({ kind: "loading" });
+  const [section, setSection] = useState<Section>("library");
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([client.me(), client.systemStatus()])
-      .then(([user, status]) => {
-        if (!cancelled) setState({ kind: "ready", user, status });
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setState({ kind: "error", message: err instanceof Error ? err.message : String(err) });
-        }
-      });
+    client
+      .me()
+      .then((user) => !cancelled && setUserState({ kind: "ready", user }))
+      .catch(
+        (err: unknown) => !cancelled && setUserState({ kind: "error", message: errorMessage(err) }),
+      );
     return () => {
       cancelled = true;
     };
@@ -37,39 +45,36 @@ export function AppShell({ client, surface }: AppShellProps) {
     <div className="fm-shell">
       <header className="fm-header">
         <h1>FotoMind</h1>
-        {state.kind === "ready" && <span className="fm-user">{state.user.username}</span>}
+        {userState.kind === "ready" && <span className="fm-user">{userState.user.username}</span>}
       </header>
       <nav className="fm-nav" aria-label="Sections">
-        {SECTIONS.map((s) => (
-          <button key={s} type="button" disabled title="Coming in a later milestone">
-            {s}
-          </button>
-        ))}
+        {SECTIONS.map(({ id, label }) =>
+          id ? (
+            <button
+              key={label}
+              type="button"
+              aria-current={section === id ? "page" : undefined}
+              onClick={() => setSection(id)}
+            >
+              {label}
+            </button>
+          ) : (
+            <button key={label} type="button" disabled title="Coming in a later milestone">
+              {label}
+            </button>
+          ),
+        )}
       </nav>
       <main className="fm-main">
-        <section aria-labelledby="fm-status-title" className="fm-card">
-          <h2 id="fm-status-title">System status</h2>
-          {state.kind === "loading" && <p>Connecting to the FotoMind API…</p>}
-          {state.kind === "error" && (
-            <p role="alert" className="fm-error">
-              API unavailable: {state.message}
-            </p>
-          )}
-          {state.kind === "ready" && (
-            <dl>
-              <dt>API</dt>
-              <dd>
-                {state.status.status} (v{state.status.version}, {state.status.environment})
-              </dd>
-              <dt>Database</dt>
-              <dd>
-                {state.status.database.status}
-                {state.status.database.server_version &&
-                  ` — PostgreSQL ${state.status.database.server_version}`}
-              </dd>
-            </dl>
-          )}
-        </section>
+        {userState.kind === "error" ? (
+          <p role="alert" className="fm-error">
+            API unavailable: {userState.message}
+          </p>
+        ) : section === "library" ? (
+          <LibraryView client={client} />
+        ) : (
+          <SourcesView client={client} />
+        )}
       </main>
       <footer className="fm-footer">FotoMind {surface} · originals are never modified</footer>
     </div>

@@ -60,6 +60,8 @@ pipeline {
                 // (Secret text credential created by the portal admin; never in the repo).
                 withCredentials([
                     string(credentialsId: 'fotomind-database-url', variable: 'DATABASE_URL'),
+                    // Shared secret the PC worker sends as X-FotoMind-Worker-Token.
+                    string(credentialsId: 'fotomind-worker-token', variable: 'WORKER_TOKEN'),
                 ]) {
                     sh '''
                         run_app() {
@@ -70,6 +72,7 @@ pipeline {
                                 -p 127.0.0.1:$HOST_PORT:$CONTAINER_PORT \
                                 -e APP_ENV=production \
                                 -e DATABASE_URL="$DATABASE_URL" \
+                                -e WORKER_TOKEN="$WORKER_TOKEN" \
                                 -v $DATA_VOL:/app/data \
                                 "$1"
                         }
